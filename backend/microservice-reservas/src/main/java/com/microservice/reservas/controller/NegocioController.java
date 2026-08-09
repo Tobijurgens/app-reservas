@@ -1,112 +1,58 @@
 package com.microservice.reservas.controller;
 
-import com.microservice.reservas.dto.NegocioDTO;
-import com.microservice.reservas.entity.*;
-import com.microservice.reservas.repository.*;
-import org.springframework.beans.factory.annotation.Autowired;
+import com.microservice.reservas.dto.request.NegocioDTO;
+import com.microservice.reservas.dto.response.NegocioResponseDTO;
+import com.microservice.reservas.service.NegocioService;
+import jakarta.validation.Valid;
+import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.Arrays;
+import java.security.Principal;
 import java.util.List;
-import java.util.Optional;
+import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/api/negocios")
+@RequiredArgsConstructor
 public class NegocioController {
 
-    @Autowired
-    private NegocioRepository negocioRepository;
-
-    @Autowired
-    private UsuarioRepository usuarioRepository;
-
-    @Autowired
-    private RecursoRepository recursoRepository;
-
-    @Autowired
-    private ServicioRepository servicioRepository;
-
-    @Autowired
-    private TurnoRepository turnoRepository;
+    private final NegocioService negocioService;
 
     @PostMapping
-    public ResponseEntity <Object> crearNegocio(@RequestBody NegocioDTO negocioDto) {
-        // Validación: El usuario dueño debe existir Y estar activo
-        Optional <Usuario> ownerOpt = usuarioRepository.findByIdAndActivoTrue(negocioDto.getIdOwner());
+    public ResponseEntity<NegocioResponseDTO> crearNegocio(@Valid @RequestBody NegocioDTO negocioDto, Principal principal) {
+        String emailOwner = principal.getName();
+        var nuevoNegocio = negocioService.crearNegocio(negocioDto, emailOwner);
+        return ResponseEntity.ok(new NegocioResponseDTO(nuevoNegocio));
+    }
 
-        if (ownerOpt.isEmpty()) {
-            return ResponseEntity.badRequest().body("Error: El usuario especificado para ser dueño no existe o está inactivo.");
-        }
-
-        Negocio negocio = new Negocio();
-        negocio.setNombre(negocioDto.getNombre());
-        negocio.setDireccion(negocioDto.getDireccion());
-        negocio.setTelefono(negocioDto.getTelefono());
-        negocio.setOwner(ownerOpt.get());
-        negocio.setActivo(true); // Nace activo por defecto
-
-        Negocio nuevoNegocio = negocioRepository.save(negocio);
-        return ResponseEntity.ok(nuevoNegocio);
+    @PutMapping("/{id}")
+    public ResponseEntity<NegocioResponseDTO> actualizarNegocio(
+            @PathVariable Long id,
+            @Valid @RequestBody NegocioDTO negocioDto,
+            Principal principal) {
+        String emailLogueado = principal.getName();
+        return ResponseEntity.ok(new NegocioResponseDTO(negocioService.actualizarNegocio(id, negocioDto, emailLogueado)));
     }
 
     @GetMapping
-    public ResponseEntity<List<Negocio>> obtenerTodos() {
-        return ResponseEntity.ok(negocioRepository.findByActivoTrue());
+    public ResponseEntity<List<NegocioResponseDTO>> obtenerTodos() {
+        List<NegocioResponseDTO> lista = negocioService.obtenerTodos().stream()
+                .map(NegocioResponseDTO::new)
+                .collect(Collectors.toList());
+        return ResponseEntity.ok(lista);
     }
 
     @GetMapping("/{id}")
-    public ResponseEntity<Object> obtenerPorId(@PathVariable Long id) {
-        return negocioRepository.findByIdAndActivoTrue(id)
-                .map(negocio -> ResponseEntity.ok((Object) negocio))
-                .orElseGet(() -> ResponseEntity.badRequest().body("Error: Negocio no encontrado o inactivo."));
+    public ResponseEntity<NegocioResponseDTO> obtenerPorId(@PathVariable Long id) {
+        return negocioService.obtenerPorId(id)
+                .map(negocio -> ResponseEntity.ok(new NegocioResponseDTO(negocio)))
+                .orElseThrow(() -> new RuntimeException("Negocio no encontrado o inactivo."));
     }
 
     @DeleteMapping("/{id}")
-    public ResponseEntity<Object> eliminarNegocio(@PathVariable Long id) {
-        Optional<Negocio> negocioOpt = negocioRepository.findById(id);
-        if (negocioOpt.isEmpty()) return ResponseEntity.badRequest().body("Error: El negocio no existe.");
-
-        Negocio negocio = negocioOpt.get();
-        if (!negocio.getActivo()) return ResponseEntity.badRequest().body("Error: Ya estaba eliminado.");
-
-        // 1. Dar de baja el Negocio
-        negocio.setActivo(false);
-        negocioRepository.save(negocio);
-
-        int recursosBorrados = 0;
-        int serviciosBorrados = 0;
-        int turnosCancelados = 0;
-        List<String> estadosACancelar = Arrays.asList("PENDIENTE", "CONFIRMADO");
-
-        // 2. Buscar todos los recursos de este negocio
-        List<Recurso> recursos = recursoRepository.findByNegocioIdAndActivoTrue(id);
-
-        for (Recurso recurso : recursos) {
-            recurso.setActivo(false);
-            recursoRepository.save(recurso);
-            recursosBorrados++;
-
-            // 3. Buscar y dar de baja los servicios de este recurso
-            List<Servicio> servicios = servicioRepository.findByRecursoIdAndActivoTrue(recurso.getId());
-            for (Servicio servicio : servicios) {
-                servicio.setActivo(false);
-                servicioRepository.save(servicio);
-                serviciosBorrados++;
-            }
-
-            // 4. Cancelar los turnos futuros asignados a este recurso
-            List<Turno> turnos = turnoRepository.findByRecursoIdAndEstadoIn(recurso.getId(), estadosACancelar);
-            for (Turno turno : turnos) {
-                turno.setEstado("CANCELADO");
-                turnoRepository.save(turno);
-                turnosCancelados++;
-            }
-        }
-
-        return ResponseEntity.ok("Negocio dado de baja exitosamente. Se eliminaron " + recursosBorrados +
-                " recursos, " + serviciosBorrados + " servicios y se cancelaron " +
-                turnosCancelados + " turnos pendientes.");
+    public ResponseEntity<String> eliminarNegocio(@PathVariable Long id, Principal principal) {
+        String emailLogueado = principal.getName();
+        return ResponseEntity.ok(negocioService.eliminarNegocio(id, emailLogueado));
     }
-
 }

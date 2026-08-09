@@ -7,11 +7,13 @@ import java.util.TimeZone;
 
 @SpringBootApplication
 public class MicroserviceReservasApplication {
-	public static void main(String[] args) {
-		// 2. Add this line BEFORE SpringApplication.run
-		// This forces Java to use the specific timezone string that PostgreSQL expects
-		TimeZone.setDefault(TimeZone.getTimeZone("America/Argentina/Buenos_Aires"));
 
+	public static void main(String[] args) {
+		// 1. SETEAMOS EL RELOJ ANTES DE QUE ARRANQUE NADA
+		// Usamos GMT-03:00 para que PostgreSQL lo entienda sin diccionarios
+		TimeZone.setDefault(TimeZone.getTimeZone("GMT-03:00"));
+
+		// 2. AHORA SÍ, LEVANTAMOS SPRING BOOT
 		SpringApplication.run(MicroserviceReservasApplication.class, args);
 	}
 }

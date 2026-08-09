@@ -1,5 +1,6 @@
 package com.microservice.reservas.entity;
 
+import com.microservice.reservas.enums.EstadoTurno;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Data;
@@ -23,7 +24,8 @@ public class Turno {
     private LocalDateTime fechaHoraFin;
 
     // Puede ser "PENDIENTE", "CONFIRMADO" o "CANCELADO"
-    private String estado;
+    @Enumerated(EnumType.STRING)
+    private EstadoTurno estado;
 
     // RELACIONES CON LAS OTRAS TABLAS:
 

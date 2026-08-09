@@ -11,4 +11,6 @@ import java.util.Optional;
 public interface NegocioRepository extends JpaRepository<Negocio, Long> {
     List<Negocio> findByActivoTrue();
     Optional<Negocio> findByIdAndActivoTrue(Long id);
+    // NUEVO: Busca todos los negocios activos de un dueño específico
+    List<Negocio> findByOwnerIdAndActivoTrue(Long ownerId);
 }

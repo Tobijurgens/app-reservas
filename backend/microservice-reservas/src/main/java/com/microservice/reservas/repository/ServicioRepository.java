@@ -1,7 +1,6 @@
 package com.microservice.reservas.repository;
 
 import com.microservice.reservas.entity.Servicio;
-import com.microservice.reservas.entity.Turno;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 

@@ -1,0 +1,70 @@
+package com.microservice.reservas.exception;
+
+import com.fasterxml.jackson.annotation.JsonInclude;
+import lombok.AllArgsConstructor;
+import lombok.Data;
+import org.springframework.http.ResponseEntity;
+import org.springframework.validation.FieldError;
+import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.bind.annotation.ExceptionHandler;
+import org.springframework.web.bind.annotation.RestControllerAdvice;
+
+import java.time.LocalDateTime;
+import java.util.HashMap;
+import java.util.Map;
+
+@RestControllerAdvice
+public class GlobalExceptionHandler {
+
+    // 1. El manejador que ya tenías para los errores de lógica de negocio (RuntimeExceptions)
+    @ExceptionHandler(RuntimeException.class)
+    public ResponseEntity<ErrorResponse> handleRuntimeException(RuntimeException ex) {
+        ErrorResponse error = new ErrorResponse(
+                LocalDateTime.now(),
+                400,
+                "Bad Request",
+                ex.getMessage()
+        );
+        return ResponseEntity.status(400).body(error);
+    }
+
+    // 2. EL NUEVO MANEJADOR: Atrapa cuando fallan los @Valid en los DTOs
+    @ExceptionHandler(MethodArgumentNotValidException.class)
+    public ResponseEntity<ErrorResponse> handleValidationExceptions(MethodArgumentNotValidException ex) {
+        Map<String, String> errores = new HashMap<>();
+
+        for (FieldError error : ex.getBindingResult().getFieldErrors()) {
+            errores.put(error.getField(), error.getDefaultMessage());
+        }
+
+        ErrorResponse error = new ErrorResponse(
+                LocalDateTime.now(),
+                400,
+                "Bad Request - Error de Validación",
+                "Uno o más campos enviados no son válidos.",
+                errores
+        );
+        return ResponseEntity.status(400).body(error);
+    }
+
+    // --- Estructura del JSON de error ---
+
+    @Data
+    @AllArgsConstructor
+    @JsonInclude(JsonInclude.Include.NON_NULL) // Magia: Si detalles es null, no lo muestra en el JSON
+    public static class ErrorResponse {
+        private LocalDateTime timestamp;
+        private int status;
+        private String error;
+        private String message;
+        private Map<String, String> detalles;
+
+        // Constructor para los RuntimeException (que no usan detalles)
+        public ErrorResponse(LocalDateTime timestamp, int status, String error, String message) {
+            this.timestamp = timestamp;
+            this.status = status;
+            this.error = error;
+            this.message = message;
+        }
+    }
+}

@@ -88,7 +88,7 @@ Content-Type: application/json
   "descripcion": "Corte a tijera o máquina. Incluye lavado con shampoo premium, peinado y bebida de cortesía.",
   "precio": 10000.0,
   "duracionMinutos": 45,
-  "idRecurso": 3
+  "idRecurso": 1
 }
 
 ### 9. Crear Servicio 2 (Para Mateo - ID 2)
@@ -110,8 +110,8 @@ Content-Type: application/json
 {
   "fechaHoraInicio": "2026-08-20T10:00:00",
   "idCliente": 2,
-  "idRecurso": 4,
-  "idServicio": 3
+  "idRecurso": 1,
+  "idServicio": 1
 }
 
 ### 10. Crear Turno 2 (Marcos se hace la barba con Mateo el 20 de Agosto) -> ID 2
