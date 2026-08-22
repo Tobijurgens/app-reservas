@@ -43,11 +43,32 @@ public class NegocioController {
         return ResponseEntity.ok(lista);
     }
 
+    // NUEVO: Endpoint para el Dashboard del dueño
+    @GetMapping("/mis-negocios")
+    public ResponseEntity<List<NegocioResponseDTO>> obtenerMisNegocios(Principal principal) {
+        // Spring Security saca el email del Token JWT automáticamente
+        String emailLogueado = principal.getName();
+
+        List<NegocioResponseDTO> misNegocios = negocioService.obtenerMisNegocios(emailLogueado).stream()
+                .map(NegocioResponseDTO::new)
+                .collect(Collectors.toList());
+
+        return ResponseEntity.ok(misNegocios);
+    }
+
     @GetMapping("/{id}")
     public ResponseEntity<NegocioResponseDTO> obtenerPorId(@PathVariable Long id) {
         return negocioService.obtenerPorId(id)
                 .map(negocio -> ResponseEntity.ok(new NegocioResponseDTO(negocio)))
                 .orElseThrow(() -> new RuntimeException("Negocio no encontrado o inactivo."));
+    }
+
+    // NUEVO: Endpoint público para consultar por el Slug/Alias
+    @GetMapping("/publico/{alias}")
+    public ResponseEntity<NegocioResponseDTO> obtenerPorAlias(@PathVariable String alias) {
+        return negocioService.obtenerPorAlias(alias)
+                .map(negocio -> ResponseEntity.ok(new NegocioResponseDTO(negocio)))
+                .orElseThrow(() -> new RuntimeException("El negocio no existe o no se encuentra disponible."));
     }
 
     @DeleteMapping("/{id}")

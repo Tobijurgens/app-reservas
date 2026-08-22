@@ -5,11 +5,10 @@ import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
-
 import java.time.LocalDateTime;
 
 @Entity
-@Table(name = "turnos")
+@Table(name = "turnos", indexes = {@Index(name = "idx_fecha_inicio", columnList = "fechaHoraInicio")})
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
@@ -19,28 +18,21 @@ public class Turno {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    // Guarda la fecha y hora exacta del turno
     private LocalDateTime fechaHoraInicio;
     private LocalDateTime fechaHoraFin;
 
-    // Puede ser "PENDIENTE", "CONFIRMADO" o "CANCELADO"
     @Enumerated(EnumType.STRING)
     private EstadoTurno estado;
 
-    // RELACIONES CON LAS OTRAS TABLAS:
-
-    // "Muchos turnos pueden ser del mismo cliente"
-    @ManyToOne
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "cliente_id")
     private Usuario cliente;
 
-    // El turno ahora se asocia al Recurso (Empleado, Cancha, etc.)
-    @ManyToOne
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "recurso_id")
     private Recurso recurso;
 
-    @ManyToOne
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "servicio_id")
     private Servicio servicio;
-
 }

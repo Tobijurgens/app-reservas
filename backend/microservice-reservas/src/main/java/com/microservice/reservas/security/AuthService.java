@@ -2,56 +2,68 @@ package com.microservice.reservas.security;
 
 import com.microservice.reservas.dto.request.auth.LoginRequest;
 import com.microservice.reservas.dto.request.auth.RegisterRequest;
+import com.microservice.reservas.entity.TokenSeguridad;
 import com.microservice.reservas.entity.Usuario;
+import com.microservice.reservas.enums.EstadoCuenta;
+import com.microservice.reservas.enums.TipoToken;
+import com.microservice.reservas.repository.TokenSeguridadRepository;
 import com.microservice.reservas.repository.UsuarioRepository;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDateTime;
+import java.util.UUID;
 
+@Slf4j // Agregamos SLF4J de Lombok para un logging profesional
 @Service
+@RequiredArgsConstructor // Lombok crea el constructor automáticamente con los campos 'final'
 public class AuthService {
 
     private final UsuarioRepository usuarioRepository;
+    private final TokenSeguridadRepository tokenSeguridadRepository; // ¡ACÁ ESTÁ LA SOLUCIÓN!
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
     private final AuthenticationManager authenticationManager;
 
-    public AuthService(UsuarioRepository usuarioRepository, PasswordEncoder passwordEncoder, JwtService jwtService, AuthenticationManager authenticationManager) {
-        this.usuarioRepository = usuarioRepository;
-        this.passwordEncoder = passwordEncoder;
-        this.jwtService = jwtService;
-        this.authenticationManager = authenticationManager;
-    }
-
-    // Registrar o reactivar un usuario
     @Transactional
     public String register(RegisterRequest request) {
-        // 1. Buscamos el usuario. Si no existe, creamos una instancia nueva al vuelo.
         Usuario usuario = usuarioRepository.findByEmail(request.getEmail())
                 .orElse(new Usuario());
 
-        // 2. Si el usuario ya existía en BD (tiene ID) y está activo, lo frenamos.
-        if (usuario.getId() != null && usuario.getActivo()) {
+        if (usuario.getId() != null && usuario.getEstadoCuenta() == EstadoCuenta.ACTIVO) {
             throw new RuntimeException("El email ya se encuentra registrado y activo.");
         }
 
-        // 3. Seteamos los datos (este bloque único sirve para ambos casos)
         usuario.setNombre(request.getNombre());
         usuario.setApellido(request.getApellido());
-        usuario.setEmail(request.getEmail()); // Si era nuevo lo necesita, si ya existía simplemente lo pisa con el mismo
+        usuario.setEmail(request.getEmail());
         usuario.setTelefono(request.getTelefono());
         usuario.setPassword(passwordEncoder.encode(request.getPassword()));
-        usuario.setActivo(true);
+        usuario.setEstadoCuenta(EstadoCuenta.PENDIENTE_VERIFICACION);
 
-        usuarioRepository.save(usuario);
+        usuario = usuarioRepository.save(usuario);
 
-        return jwtService.generateToken(usuario);
+        TokenSeguridad token = tokenSeguridadRepository.findByUsuarioIdAndTipo(usuario.getId(), TipoToken.VERIFICACION)
+                .orElse(new TokenSeguridad());
+
+        token.setToken(UUID.randomUUID().toString());
+        token.setTipo(TipoToken.VERIFICACION);
+        token.setFechaExpiracion(LocalDateTime.now().plusMinutes(30));
+        token.setUsuario(usuario);
+
+        tokenSeguridadRepository.save(token);
+
+        // Reemplazamos el System.out.println por un log profesional
+        log.info("PREPARANDO EVENTO PARA RABBITMQ. TOKEN GENERADO: {}", token.getToken());
+
+        return "Usuario registrado. Por favor, revisá tu casilla de correo para verificar la cuenta.";
     }
 
-    // Loguear un usuario existente
     public String login(LoginRequest request) {
         authenticationManager.authenticate(
                 new UsernamePasswordAuthenticationToken(
@@ -60,8 +72,9 @@ public class AuthService {
                 )
         );
 
-        Usuario usuario = usuarioRepository.findByEmail(request.getEmail())
-                .orElseThrow(() -> new RuntimeException("Usuario no encontrado"));
+        // Solo dejamos loguear a los que ya validaron la cuenta
+        Usuario usuario = usuarioRepository.findByEmailAndEstadoCuenta(request.getEmail(), EstadoCuenta.ACTIVO)
+                .orElseThrow(() -> new RuntimeException("Usuario no encontrado o cuenta sin verificar."));
 
         return jwtService.generateToken(usuario);
     }

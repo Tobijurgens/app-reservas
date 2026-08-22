@@ -1,5 +1,6 @@
 package com.microservice.reservas.entity;
 
+import com.microservice.reservas.enums.EstadoCuenta;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Data;
@@ -24,7 +25,6 @@ public class Usuario implements UserDetails {
     private Long id;
 
     private String nombre;
-
     private String apellido;
 
     @Column(unique = true, nullable = false)
@@ -32,32 +32,28 @@ public class Usuario implements UserDetails {
 
     private String telefono;
 
-    // ¡Acá está el campo nuevo para guardar la contraseña encriptada!
     @Column(nullable = false)
     private String password;
 
-    @Column(columnDefinition = "boolean default true")
-    private Boolean activo = true;
-
-    // --- MÉTODOS OBLIGATORIOS DE SPRING SECURITY (USERDETAILS) ---
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
+    private EstadoCuenta estadoCuenta = EstadoCuenta.PENDIENTE_VERIFICACION;
 
     @Override
     @NonNull
     public Collection<? extends GrantedAuthority> getAuthorities() {
-        // Le asignamos un permiso base a todos los usuarios
         return List.of(new SimpleGrantedAuthority("USUARIO_REGISTRADO"));
     }
 
     @Override
     @NonNull
     public String getUsername() {
-        // Spring necesita saber qué usamos como identificador en el login
         return this.email;
     }
 
     @Override
     public boolean isEnabled() {
-        // Conectamos el estado de Spring Security con tu campo "activo"
-        return this.activo;
+        // Solo puede loguearse si verificó su cuenta
+        return this.estadoCuenta == EstadoCuenta.ACTIVO;
     }
 }

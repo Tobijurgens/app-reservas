@@ -1,4 +1,5 @@
 services:
+  # Tu base de datos original (Microservicio Reservas)
   postgres-db:
     image: postgres:16
     container_name: base-datos-turnos
@@ -12,5 +13,35 @@ services:
       - turnos_data:/var/lib/postgresql/data
     restart: unless-stopped
 
+  # NUEVO: Base de datos para Microservicio Notificaciones
+  postgres-notificaciones:
+    image: postgres:16
+    container_name: base-datos-notificaciones
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: root
+      POSTGRES_DB: notificaciones_db
+    ports:
+      - "5433:5432" # Expuesto en el 5433 para no chocar con el tuyo
+    volumes:
+      - notificaciones_data:/var/lib/postgresql/data
+    restart: unless-stopped
+
+  # NUEVO: RabbitMQ para los eventos asíncronos
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    container_name: rabbitmq_eventos
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+    ports:
+      - "5672:5672"   # Puerto interno para Spring Boot
+      - "15672:15672" # Panel web (http://localhost:15672)
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    restart: unless-stopped
+
 volumes:
   turnos_data:
+  notificaciones_data:
+  rabbitmq_data:

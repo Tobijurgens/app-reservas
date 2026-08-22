@@ -57,6 +57,23 @@ public class RecursoController {
         return ResponseEntity.ok(lista);
     }
 
+    @GetMapping("/negocio/{negocioId}/todos")
+    public ResponseEntity<List<RecursoResponseDTO>> obtenerTodosPorNegocio(@PathVariable Long negocioId) {
+        List<RecursoResponseDTO> lista = recursoService.obtenerTodosPorNegocio(negocioId).stream()
+                .map(RecursoResponseDTO::new)
+                .collect(Collectors.toList());
+        return ResponseEntity.ok(lista);
+    }
+
+    @GetMapping("/mis-asignaciones")
+    public ResponseEntity<List<RecursoResponseDTO>> obtenerMisAsignaciones(Principal principal) {
+        List<RecursoResponseDTO> lista = recursoService.obtenerMisAsignaciones(principal.getName())
+                .stream()
+                .map(RecursoResponseDTO::new)
+                .collect(Collectors.toList());
+        return ResponseEntity.ok(lista);
+    }
+
     @DeleteMapping("/{id}")
     public ResponseEntity<String> eliminarRecurso(@PathVariable Long id, Principal principal) {
         String emailLogueado = principal.getName();

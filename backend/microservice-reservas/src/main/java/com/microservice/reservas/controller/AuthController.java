@@ -2,6 +2,7 @@ package com.microservice.reservas.controller;
 
 import com.microservice.reservas.dto.request.auth.LoginRequest;
 import com.microservice.reservas.dto.request.auth.RegisterRequest;
+import com.microservice.reservas.dto.response.AuthResponse;
 import com.microservice.reservas.security.AuthService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -16,12 +17,14 @@ public class AuthController {
     private final AuthService authService;
 
     @PostMapping("/register")
-    public ResponseEntity<String> register(@Valid @RequestBody RegisterRequest request) {
-        return ResponseEntity.ok(authService.register(request));
+    public ResponseEntity<AuthResponse> register(@Valid @RequestBody RegisterRequest request) {
+        String token = authService.register(request);
+        return ResponseEntity.ok(new AuthResponse(token));
     }
 
     @PostMapping("/login")
-    public ResponseEntity<String> login(@Valid @RequestBody LoginRequest request) {
-        return ResponseEntity.ok(authService.login(request));
+    public ResponseEntity<AuthResponse> login(@Valid @RequestBody LoginRequest request) {
+        String token = authService.login(request);
+        return ResponseEntity.ok(new AuthResponse(token)); // Ahora sí devuelve JSON
     }
 }

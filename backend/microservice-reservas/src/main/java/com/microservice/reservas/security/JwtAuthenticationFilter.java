@@ -26,6 +26,13 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         this.userDetailsService = userDetailsService;
     }
 
+    // --- Evita que el filtro actúe en rutas públicas ---
+    @Override
+    protected boolean shouldNotFilter(@Nonnull HttpServletRequest request) {
+        String path = request.getServletPath();
+        return path.startsWith("/api/auth/");
+    }
+
     @Override
     protected void doFilterInternal(
             @Nonnull HttpServletRequest request,
@@ -37,7 +44,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         final String jwt;
         final String userEmail;
 
-        // 1. Si no hay header "Authorization" o no arranca con "Bearer ", lo dejamos pasar al siguiente filtro (ej: login)
+        // 1. Si no hay header "Authorization" o no arranca con "Bearer ", lo dejamos pasar al siguiente filtro
         if (authHeader == null || !authHeader.startsWith("Bearer ")) {
             filterChain.doFilter(request, response);
             return;
@@ -46,33 +53,46 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         // 2. Recortamos los primeros 7 caracteres ("Bearer ") para quedarnos solo con el Token limpio
         jwt = authHeader.substring(7);
 
-        // 3. Extraemos el email del Token
-        userEmail = jwtService.extractUsername(jwt);
-
-        // 4. Si hay email y el usuario no está ya autenticado en este proceso
-        if (userEmail != null && SecurityContextHolder.getContext().getAuthentication() == null) {
-
-            // Vamos a buscar sus datos (esto lo configuramos en el siguiente paso)
-            UserDetails userDetails = this.userDetailsService.loadUserByUsername(userEmail);
-
-            // 5. Validamos el Token
-            if (jwtService.isTokenValid(jwt, userDetails)) {
-
-                // 6. Creamos la credencial interna de Spring
-                UsernamePasswordAuthenticationToken authToken = new UsernamePasswordAuthenticationToken(
-                        userDetails,
-                        null,
-                        userDetails.getAuthorities()
-                );
-
-                authToken.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
-
-                // 7. Lo guardamos en el contexto (¡Le abrimos la puerta!)
-                SecurityContextHolder.getContext().setAuthentication(authToken);
-            }
+        // 3. NUEVO: Evitamos que el frontend nos mande la palabra "null" literal o texto vacío
+        if (jwt.trim().isEmpty() || jwt.equals("null") || jwt.equals("undefined")) {
+            filterChain.doFilter(request, response);
+            return;
         }
 
-        // 8. Que siga su camino hacia el controlador
+        // 4. NUEVO: Bloque try-catch fundamental. Si el token expiró o está malformado, lo atajamos acá.
+        try {
+            // Extraemos el email del Token
+            userEmail = jwtService.extractUsername(jwt);
+
+            // Si hay email y el usuario no está ya autenticado en este proceso
+            if (userEmail != null && SecurityContextHolder.getContext().getAuthentication() == null) {
+
+                // Vamos a buscar sus datos
+                UserDetails userDetails = this.userDetailsService.loadUserByUsername(userEmail);
+
+                // Validamos el Token
+                if (jwtService.isTokenValid(jwt, userDetails)) {
+
+                    // Creamos la credencial interna de Spring
+                    UsernamePasswordAuthenticationToken authToken = new UsernamePasswordAuthenticationToken(
+                            userDetails,
+                            null,
+                            userDetails.getAuthorities()
+                    );
+
+                    authToken.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
+
+                    // Lo guardamos en el contexto (¡Le abrimos la puerta!)
+                    SecurityContextHolder.getContext().setAuthentication(authToken);
+                }
+            }
+        } catch (Exception e) {
+            // Si el token es inválido o expiró, simplemente logueamos el error y el filtro sigue.
+            // Spring Security, al no encontrar la autenticación en el SecurityContext, devolverá un 403 Forbidden.
+            logger.error("Error validando el token JWT: " + e.getMessage());
+        }
+
+        // Que siga su camino hacia el controlador (o hacia el rechazo si no se autenticó)
         filterChain.doFilter(request, response);
     }
 }

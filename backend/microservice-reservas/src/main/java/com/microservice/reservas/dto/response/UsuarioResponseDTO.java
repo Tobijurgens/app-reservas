@@ -10,7 +10,7 @@ public class UsuarioResponseDTO {
     private String apellido;
     private String email;
     private String telefono;
-    // ¡Ojo! NO incluimos el password acá. Así lo protegemos.
+    private String estadoCuenta;
 
     public UsuarioResponseDTO(Usuario usuario) {
         this.id = usuario.getId();
@@ -18,5 +18,6 @@ public class UsuarioResponseDTO {
         this.apellido = usuario.getApellido();
         this.email = usuario.getEmail();
         this.telefono = usuario.getTelefono();
+        this.estadoCuenta = usuario.getEstadoCuenta().name();
     }
 }

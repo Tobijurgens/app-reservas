@@ -16,9 +16,8 @@ import org.springframework.security.web.SecurityFilterChain;
 public class SecurityConfig {
 
     @Bean
-    public SecurityFilterChain filterChain(HttpSecurity http, JwtAuthenticationFilter jwtAuthenticationFilter) {
+    public SecurityFilterChain filterChain(HttpSecurity http, JwtAuthenticationFilter jwtAuthenticationFilter){
         http
-                .cors(org.springframework.security.config.Customizer.withDefaults())
                 .csrf(AbstractHttpConfigurer::disable)
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
@@ -26,7 +25,7 @@ public class SecurityConfig {
                         .requestMatchers("/api/auth/**").permitAll()
 
                         // 2. GETs públicos: Cualquiera puede ver negocios, recursos y servicios
-                        .requestMatchers(org.springframework.http.HttpMethod.GET, "/api/negocios/**", "/api/recursos/**", "/api/servicios/**").permitAll()
+                        .requestMatchers(org.springframework.http.HttpMethod.GET, "/api/negocios/**", "/api/recursos/**", "/api/servicios/**", "/api/turnos/disponibles").permitAll()
 
                         // Rutas públicas de Swagger
                         .requestMatchers("/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll()

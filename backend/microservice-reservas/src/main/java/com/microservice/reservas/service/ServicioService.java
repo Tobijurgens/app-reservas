@@ -7,7 +7,6 @@ import com.microservice.reservas.repository.*;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
-import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
 
@@ -75,7 +74,7 @@ public class ServicioService {
         servicio.setActivo(false);
         servicioRepository.save(servicio);
 
-        List<EstadoTurno> estadosACancelar = Arrays.asList(EstadoTurno.PENDIENTE, EstadoTurno.CONFIRMADO);
+        List<EstadoTurno> estadosACancelar = List.of(EstadoTurno.CONFIRMADO);
         List<Turno> turnosAfectados = turnoRepository.findByServicioIdAndEstadoIn(id, estadosACancelar);
 
         for (Turno turno : turnosAfectados) {

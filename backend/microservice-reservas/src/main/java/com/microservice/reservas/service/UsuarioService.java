@@ -2,12 +2,12 @@ package com.microservice.reservas.service;
 
 import com.microservice.reservas.dto.request.ActualizarPerfilRequest;
 import com.microservice.reservas.entity.*;
+import com.microservice.reservas.enums.EstadoCuenta;
 import com.microservice.reservas.enums.EstadoTurno;
 import com.microservice.reservas.repository.*;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
-import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
 
@@ -23,7 +23,7 @@ public class UsuarioService {
     private final NegocioService negocioService;
 
     public Usuario actualizarPerfil(String emailLogueado, ActualizarPerfilRequest request) {
-        Usuario usuario = usuarioRepository.findByEmailAndActivoTrue(emailLogueado)
+        Usuario usuario = usuarioRepository.findByEmailAndEstadoCuenta(emailLogueado, EstadoCuenta.ACTIVO)
                 .orElseThrow(() -> new RuntimeException("Usuario no encontrado."));
 
         usuario.setNombre(request.getNombre());
@@ -34,15 +34,15 @@ public class UsuarioService {
     }
 
     public List<Usuario> obtenerTodos() {
-        return usuarioRepository.findByActivoTrue();
+        return usuarioRepository.findByEstadoCuenta(EstadoCuenta.ACTIVO);
     }
 
     public Optional<Usuario> obtenerPorId(Long id) {
-        return usuarioRepository.findByIdAndActivoTrue(id);
+        return usuarioRepository.findByIdAndEstadoCuenta(id, EstadoCuenta.ACTIVO);
     }
 
     public Optional<Usuario> obtenerPorEmail(String email) {
-        return usuarioRepository.findByEmailAndActivoTrue(email);
+        return usuarioRepository.findByEmailAndEstadoCuenta(email, EstadoCuenta.ACTIVO);
     }
 
     public String eliminarUsuario(Long id, String emailLogueado) {
@@ -54,16 +54,16 @@ public class UsuarioService {
             throw new RuntimeException("Acceso denegado: Solo podés eliminar tu propia cuenta.");
         }
 
-        if (!usuario.getActivo()) {
+        if (usuario.getEstadoCuenta() != EstadoCuenta.ACTIVO) {
             throw new RuntimeException("Ya estaba eliminado.");
         }
 
         // 2. Baja lógica del usuario
-        usuario.setActivo(false);
+        usuario.setEstadoCuenta(EstadoCuenta.SUSPENDIDO);
         usuarioRepository.save(usuario);
 
         // 3. Cancelar los turnos que haya sacado como cliente
-        List<EstadoTurno> estadosACancelar = Arrays.asList(EstadoTurno.PENDIENTE, EstadoTurno.CONFIRMADO);
+        List<EstadoTurno> estadosACancelar = List.of(EstadoTurno.CONFIRMADO);
         List<Turno> turnosAfectados = turnoRepository.findByClienteIdAndEstadoIn(id, estadosACancelar);
 
         for (Turno turno : turnosAfectados) {

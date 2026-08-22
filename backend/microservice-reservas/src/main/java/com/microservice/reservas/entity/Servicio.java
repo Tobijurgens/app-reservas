@@ -22,10 +22,9 @@ public class Servicio {
     private String descripcion;
 
     private Double precio;
-
     private Integer duracionMinutos;
 
-    @ManyToOne
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "recurso_id")
     private Recurso recurso;
 
