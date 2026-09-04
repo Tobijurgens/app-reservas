@@ -1,0 +1,15 @@
+# SECRETOS Y ENTORNOS
+.env
+*.properties.local
+
+# VOLÚMENES DE DOCKER
+turnos_data/
+notificaciones_data/
+rabbitmq_data/
+
+# IDEs Y SISTEMA OPERATIVO GLOBALES
+.idea/
+.vscode/
+*.iml
+.DS_Store
+Thumbs.db

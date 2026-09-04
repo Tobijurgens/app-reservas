@@ -17,6 +17,9 @@ public class RecursoResponseDTO {
     private String nombreNegocio;
     private String emailUsuario;
     private Boolean activo;
+
+    private String estadoAsociacion;
+
     private List<HorarioSemanalDTO> horarios = new ArrayList<>();
 
     public RecursoResponseDTO(Recurso recurso) {
@@ -24,6 +27,10 @@ public class RecursoResponseDTO {
         this.nombre = recurso.getNombre();
         this.descripcion = recurso.getDescripcion();
         this.activo = recurso.getActivo();
+
+        if (recurso.getEstadoAsociacion() != null) {
+            this.estadoAsociacion = recurso.getEstadoAsociacion().name();
+        }
 
         if (recurso.getNegocio() != null) {
             this.negocioId = recurso.getNegocio().getId();

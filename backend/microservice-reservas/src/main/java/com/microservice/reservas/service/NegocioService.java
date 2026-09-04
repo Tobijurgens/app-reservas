@@ -6,8 +6,10 @@ import com.microservice.reservas.entity.*;
 import com.microservice.reservas.enums.EstadoCuenta;
 import com.microservice.reservas.enums.EstadoTurno;
 import com.microservice.reservas.repository.*;
+import com.microservice.reservas.util.ValidacionUtil;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -23,26 +25,30 @@ public class NegocioService {
     private final ServicioRepository servicioRepository;
     private final TurnoRepository turnoRepository;
 
+    @Transactional
     public Negocio crearNegocio(NegocioDTO negocioDto, String emailOwner) {
         String aliasLimpio = negocioDto.getAlias().toLowerCase().trim();
-        if (negocioRepository.existsByAlias(aliasLimpio)) {
+        if (negocioRepository.existsByAliasAndActivoTrue(aliasLimpio)) {
             throw new RuntimeException("Este link ya está en uso. Por favor, elegí otro alias.");
         }
 
         Usuario owner = usuarioRepository.findByEmailAndEstadoCuenta(emailOwner, EstadoCuenta.ACTIVO)
                 .orElseThrow(() -> new RuntimeException("Usuario autenticado no encontrado o inactivo."));
 
+        ValidacionUtil.validarSemanaCompleta(negocioDto.getHorarios());
+
         Negocio negocio = new Negocio();
         negocio.setAlias(aliasLimpio);
         negocio.setOwner(owner);
         negocio.setActivo(true);
-        negocio.setHorarios(new ArrayList<>()); // Inicializamos la lista de la nueva relación
+        negocio.setHorarios(new ArrayList<>());
 
         mapearCamposComunes(negocio, negocioDto);
 
         return negocioRepository.save(negocio);
     }
 
+    @Transactional
     public Negocio actualizarNegocio(Long id, NegocioDTO negocioDto, String emailLogueado) {
         Negocio negocio = negocioRepository.findByIdAndActivoTrue(id)
                 .orElseThrow(() -> new RuntimeException("Negocio no encontrado o inactivo."));
@@ -52,20 +58,19 @@ public class NegocioService {
         }
 
         String nuevoAlias = negocioDto.getAlias().toLowerCase().trim();
-        if (!negocio.getAlias().equals(nuevoAlias) && negocioRepository.existsByAlias(nuevoAlias)) {
+        if (!negocio.getAlias().equals(nuevoAlias) && negocioRepository.existsByAliasAndActivoTrue(nuevoAlias)) {
             throw new RuntimeException("Este link ya está en uso. Por favor, elegí otro alias.");
         }
 
-        negocio.setAlias(nuevoAlias);
+        ValidacionUtil.validarSemanaCompleta(negocioDto.getHorarios());
 
+        negocio.setAlias(nuevoAlias);
         mapearCamposComunes(negocio, negocioDto);
 
         return negocioRepository.save(negocio);
     }
 
     public List<Negocio> obtenerMisNegocios(String emailLogueado) {
-        // Usuario owner = usuarioRepository.findByEmailAndActivoTrue(emailLogueado)
-        // Cannot resolve method 'findByEmailAndActivoTrue' in 'UsuarioRepository'
         Usuario owner = usuarioRepository.findByEmailAndEstadoCuenta(emailLogueado, EstadoCuenta.ACTIVO)
                 .orElseThrow(() -> new RuntimeException("Usuario autenticado no encontrado o inactivo."));
 
@@ -84,6 +89,7 @@ public class NegocioService {
         return negocioRepository.findByAliasAndActivoTrue(alias.toLowerCase().trim());
     }
 
+    @Transactional
     public String eliminarNegocio(Long id, String emailLogueado) {
         Negocio negocio = negocioRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("El negocio no existe."));
@@ -135,8 +141,6 @@ public class NegocioService {
         negocio.setDireccion(dto.getDireccion());
         negocio.setTelefono(dto.getTelefono());
         negocio.setDescripcion(dto.getDescripcion());
-
-        // NUEVO MAPEO DEL EMAIL
         negocio.setEmailContacto(dto.getEmailContacto());
 
         if (negocio.getHorarios() == null) {
@@ -158,8 +162,6 @@ public class NegocioService {
             }
         }
     }
-
-    // --- MÉTODOS EXTRAÍDOS (CLEAN CODE) ---
 
     private void actualizarHorarioNegocio(HorarioNegocio existente, HorarioSemanalDTO hDto) {
         existente.setAbierto(hDto.getActivo());

@@ -2,6 +2,7 @@ package com.microservice.reservas.security;
 
 import com.microservice.reservas.dto.request.auth.LoginRequest;
 import com.microservice.reservas.dto.request.auth.RegisterRequest;
+import com.microservice.reservas.dto.event.UsuarioRegistradoEvent;
 import com.microservice.reservas.entity.TokenSeguridad;
 import com.microservice.reservas.entity.Usuario;
 import com.microservice.reservas.enums.EstadoCuenta;
@@ -10,6 +11,7 @@ import com.microservice.reservas.repository.TokenSeguridadRepository;
 import com.microservice.reservas.repository.UsuarioRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -19,16 +21,17 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
-@Slf4j // Agregamos SLF4J de Lombok para un logging profesional
+@Slf4j
 @Service
-@RequiredArgsConstructor // Lombok crea el constructor automáticamente con los campos 'final'
+@RequiredArgsConstructor
 public class AuthService {
 
     private final UsuarioRepository usuarioRepository;
-    private final TokenSeguridadRepository tokenSeguridadRepository; // ¡ACÁ ESTÁ LA SOLUCIÓN!
+    private final TokenSeguridadRepository tokenSeguridadRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
     private final AuthenticationManager authenticationManager;
+    private final RabbitTemplate rabbitTemplate;
 
     @Transactional
     public String register(RegisterRequest request) {
@@ -58,8 +61,15 @@ public class AuthService {
 
         tokenSeguridadRepository.save(token);
 
-        // Reemplazamos el System.out.println por un log profesional
-        log.info("PREPARANDO EVENTO PARA RABBITMQ. TOKEN GENERADO: {}", token.getToken());
+        UsuarioRegistradoEvent evento = new UsuarioRegistradoEvent(
+                usuario.getEmail(),
+                usuario.getNombre(),
+                token.getToken()
+        );
+
+        rabbitTemplate.convertAndSend("notificaciones.exchange", "registro.email.routing.key", evento);
+
+        log.info("🚀 Evento de registro disparado a RabbitMQ para: {}", usuario.getEmail());
 
         return "Usuario registrado. Por favor, revisá tu casilla de correo para verificar la cuenta.";
     }
@@ -72,10 +82,30 @@ public class AuthService {
                 )
         );
 
-        // Solo dejamos loguear a los que ya validaron la cuenta
         Usuario usuario = usuarioRepository.findByEmailAndEstadoCuenta(request.getEmail(), EstadoCuenta.ACTIVO)
                 .orElseThrow(() -> new RuntimeException("Usuario no encontrado o cuenta sin verificar."));
 
         return jwtService.generateToken(usuario);
+    }
+
+    @Transactional
+    public String verificarCuenta(String tokenStr) {
+        TokenSeguridad token = tokenSeguridadRepository.findByToken(tokenStr)
+                .orElseThrow(() -> new RuntimeException("Token inválido o no encontrado."));
+
+        if (token.getFechaExpiracion().isBefore(LocalDateTime.now())) {
+            tokenSeguridadRepository.delete(token);
+            throw new RuntimeException("El token ha expirado. Por favor, registrate nuevamente.");
+        }
+
+        Usuario usuario = token.getUsuario();
+        usuario.setEstadoCuenta(EstadoCuenta.ACTIVO);
+        usuarioRepository.save(usuario);
+
+        tokenSeguridadRepository.delete(token);
+
+        log.info("✅ Cuenta activada con éxito para el usuario: {}", usuario.getEmail());
+
+        return "¡Cuenta verificada y activada con éxito! Ya podés iniciar sesión en AgendApp.";
     }
 }

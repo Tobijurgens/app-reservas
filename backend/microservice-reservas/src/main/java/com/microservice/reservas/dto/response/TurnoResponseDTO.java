@@ -8,7 +8,7 @@ import lombok.NoArgsConstructor;
 import java.time.LocalDateTime;
 
 @Data
-@NoArgsConstructor // Es una buena práctica agregarlo al definir constructores a mano
+@NoArgsConstructor
 public class TurnoResponseDTO {
     private Long id;
     private LocalDateTime fechaHoraInicio;
@@ -45,7 +45,6 @@ public class TurnoResponseDTO {
             this.telefonoCliente = turno.getCliente().getTelefono();
         }
 
-        // Navegamos las relaciones de forma segura
         if (turno.getServicio() != null) {
             this.servicioId = turno.getServicio().getId();
             this.nombreServicio = turno.getServicio().getNombre();

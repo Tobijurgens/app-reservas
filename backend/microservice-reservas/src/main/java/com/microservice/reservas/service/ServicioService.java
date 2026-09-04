@@ -6,6 +6,7 @@ import com.microservice.reservas.enums.EstadoTurno;
 import com.microservice.reservas.repository.*;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.Optional;
@@ -18,6 +19,7 @@ public class ServicioService {
     private final RecursoRepository recursoRepository;
     private final TurnoRepository turnoRepository;
 
+    @Transactional
     public Servicio crearServicio(ServicioDTO servicioDto, String emailLogueado) {
         Recurso recurso = recursoRepository.findByIdAndActivoTrue(servicioDto.getIdRecurso())
                 .orElseThrow(() -> new RuntimeException("El recurso especificado no existe o está inactivo."));
@@ -35,9 +37,10 @@ public class ServicioService {
         return servicioRepository.save(servicio);
     }
 
+    @Transactional
     public Servicio actualizarServicio(Long id, ServicioDTO servicioDto, String emailLogueado) {
-        Servicio servicio = servicioRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("El servicio especificado no existe."));
+        Servicio servicio = servicioRepository.findByIdAndActivoTrue(id)
+                .orElseThrow(() -> new RuntimeException("El servicio especificado no existe o está inactivo."));
 
         validarPermisos(servicio.getRecurso(), emailLogueado);
 
@@ -61,6 +64,7 @@ public class ServicioService {
         return servicioRepository.findByRecursoIdAndActivoTrue(recursoId);
     }
 
+    @Transactional
     public String eliminarServicio(Long id, String emailLogueado) {
         Servicio servicio = servicioRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("El servicio no existe."));
@@ -85,7 +89,6 @@ public class ServicioService {
         return "Servicio eliminado lógicamente. Se cancelaron " + turnosAfectados.size() + " turnos pendientes.";
     }
 
-    // Método auxiliar para no repetir código en el candado dual
     private void validarPermisos(Recurso recurso, String emailLogueado) {
         String emailOwnerNegocio = recurso.getNegocio().getOwner().getEmail();
         boolean esElOwner = emailOwnerNegocio.equals(emailLogueado);

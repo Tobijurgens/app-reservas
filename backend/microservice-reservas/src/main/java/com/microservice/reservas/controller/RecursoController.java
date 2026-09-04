@@ -19,6 +19,24 @@ public class RecursoController {
 
     private final RecursoService recursoService;
 
+    @GetMapping("/invitacion/aceptar")
+    public ResponseEntity<String> aceptarInvitacion(@RequestParam("token") String token) {
+        try {
+            return ResponseEntity.ok(recursoService.aceptarInvitacion(token));
+        } catch (RuntimeException e) {
+            return ResponseEntity.badRequest().body(e.getMessage());
+        }
+    }
+
+    @GetMapping("/invitacion/rechazar")
+    public ResponseEntity<String> rechazarInvitacion(@RequestParam("token") String token) {
+        try {
+            return ResponseEntity.ok(recursoService.rechazarInvitacion(token));
+        } catch (RuntimeException e) {
+            return ResponseEntity.badRequest().body(e.getMessage());
+        }
+    }
+
     @PostMapping
     public ResponseEntity<RecursoResponseDTO> crearRecurso(@Valid @RequestBody RecursoDTO recursoDto, Principal principal) {
         String emailLogueado = principal.getName();

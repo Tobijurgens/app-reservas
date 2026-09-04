@@ -16,7 +16,6 @@ import java.util.Map;
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
-    // 1. El manejador que ya tenías para los errores de lógica de negocio (RuntimeExceptions)
     @ExceptionHandler(RuntimeException.class)
     public ResponseEntity<ErrorResponse> handleRuntimeException(RuntimeException ex) {
         ErrorResponse error = new ErrorResponse(
@@ -28,7 +27,6 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(400).body(error);
     }
 
-    // 2. EL NUEVO MANEJADOR: Atrapa cuando fallan los @Valid en los DTOs
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<ErrorResponse> handleValidationExceptions(MethodArgumentNotValidException ex) {
         Map<String, String> errores = new HashMap<>();
@@ -47,11 +45,9 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(400).body(error);
     }
 
-    // --- Estructura del JSON de error ---
-
     @Data
     @AllArgsConstructor
-    @JsonInclude(JsonInclude.Include.NON_NULL) // Magia: Si detalles es null, no lo muestra en el JSON
+    @JsonInclude(JsonInclude.Include.NON_NULL)
     public static class ErrorResponse {
         private LocalDateTime timestamp;
         private int status;
@@ -59,7 +55,6 @@ public class GlobalExceptionHandler {
         private String message;
         private Map<String, String> detalles;
 
-        // Constructor para los RuntimeException (que no usan detalles)
         public ErrorResponse(LocalDateTime timestamp, int status, String error, String message) {
             this.timestamp = timestamp;
             this.status = status;

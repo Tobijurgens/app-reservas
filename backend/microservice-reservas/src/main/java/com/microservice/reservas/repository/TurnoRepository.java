@@ -15,17 +15,15 @@ import java.util.List;
 @Repository
 public interface TurnoRepository extends JpaRepository<Turno,Long>{
 
-    // 1. SOLAPAMIENTO CORREGIDO usando x1, x2, x3
     @Query("SELECT COUNT(t) > 0 FROM Turno t WHERE t.recurso.id = :recursoId " +
-            "AND t.fechaHoraInicio < :x2 AND t.fechaHoraFin > :x1 " +
-            "AND t.estado != :x3")
+            "AND t.fechaHoraInicio < :fechaFin AND t.fechaHoraFin > :fechaInicio " +
+            "AND t.estado != :estadoIgnorado")
     boolean existeSolapamiento(
             @Param("recursoId") Long recursoId,
-            @Param("x1") LocalDateTime x1,
-            @Param("x2") LocalDateTime x2,
-            @Param("x3") EstadoTurno x3);
+            @Param("fechaInicio") LocalDateTime fechaInicio,
+            @Param("fechaFin") LocalDateTime fechaFin,
+            @Param("estadoIgnorado") EstadoTurno estadoIgnorado);
 
-    // 2. DISPONIBILIDAD
     @Query("SELECT t FROM Turno t WHERE t.recurso.id = :recursoId " +
             "AND t.fechaHoraInicio BETWEEN :inicio AND :fin " +
             "AND t.estado != :estadoIgnorado")
@@ -48,18 +46,18 @@ public interface TurnoRepository extends JpaRepository<Turno,Long>{
     Page<Turno> findByRecursoIdDesc(@Param("recursoId") Long recursoId, Pageable pageable);
 
     @Query("SELECT t FROM Turno t WHERE t.servicio.recurso.negocio.id = :negocioId " +
-            "AND t.fechaHoraInicio >= :x1 AND t.fechaHoraInicio <= :x2")
+            "AND t.fechaHoraInicio >= :fechaInicio AND t.fechaHoraInicio <= :fechaFin")
     List<Turno> findTurnosParaReporte(
             @Param("negocioId") Long negocioId,
-            @Param("x1") LocalDateTime x1,
-            @Param("x2") LocalDateTime x2);
+            @Param("fechaInicio") LocalDateTime fechaInicio,
+            @Param("fechaFin") LocalDateTime fechaFin);
 
     @Query("SELECT t FROM Turno t WHERE t.servicio.recurso.negocio.id = :negocioId " +
             "AND t.recurso.id = :recursoId " +
-            "AND t.fechaHoraInicio >= :x1 AND t.fechaHoraInicio <= :x2")
+            "AND t.fechaHoraInicio >= :fechaInicio AND t.fechaHoraInicio <= :fechaFin")
     List<Turno> findTurnosParaReportePorRecurso(
             @Param("negocioId") Long negocioId,
             @Param("recursoId") Long recursoId,
-            @Param("x1") LocalDateTime x1,
-            @Param("x2") LocalDateTime x2);
+            @Param("fechaInicio") LocalDateTime fechaInicio,
+            @Param("fechaFin") LocalDateTime fechaFin);
 }

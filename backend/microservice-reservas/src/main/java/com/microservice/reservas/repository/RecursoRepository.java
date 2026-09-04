@@ -14,4 +14,5 @@ public interface RecursoRepository extends JpaRepository<Recurso, Long> {
     List<Recurso> findByNegocioIdAndActivoTrue(Long negocioId);
     List<Recurso> findByNegocioId(Long negocioId);
     List<Recurso> findByUsuarioEmailAndActivoTrue(String email);
+    Optional<Recurso> findByTokenInvitacion(String tokenInvitacion);
 }

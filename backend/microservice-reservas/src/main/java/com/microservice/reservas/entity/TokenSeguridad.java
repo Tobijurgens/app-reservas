@@ -29,7 +29,6 @@ public class TokenSeguridad {
     @Column(nullable = false)
     private LocalDateTime fechaExpiracion;
 
-    // Magia LAZY aplicada acá también
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "usuario_id", nullable = false)
     private Usuario usuario;

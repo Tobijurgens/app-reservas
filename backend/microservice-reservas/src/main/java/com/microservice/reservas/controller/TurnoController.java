@@ -35,17 +35,9 @@ public class TurnoController {
         return ResponseEntity.ok(new TurnoResponseDTO(turnoService.crearTurno(turnoDto, emailCliente)));
     }
 
-    @GetMapping
-    public ResponseEntity<List<TurnoResponseDTO>> obtenerTodos() {
-        List<TurnoResponseDTO> lista = turnoService.obtenerTodos().stream()
-                .map(TurnoResponseDTO::new)
-                .collect(Collectors.toList());
-        return ResponseEntity.ok(lista);
-    }
-
     @GetMapping("/{id}")
-    public ResponseEntity<TurnoResponseDTO> obtenerPorId(@PathVariable Long id) {
-        return turnoService.obtenerPorId(id)
+    public ResponseEntity<TurnoResponseDTO> obtenerPorId(@PathVariable Long id, Principal principal) {
+        return turnoService.obtenerPorId(id, principal.getName())
                 .map(turno -> ResponseEntity.ok(new TurnoResponseDTO(turno)))
                 .orElseThrow(() -> new RuntimeException("Error: Turno no encontrado."));
     }
@@ -62,26 +54,25 @@ public class TurnoController {
     @GetMapping("/negocio/{negocioId}")
     public ResponseEntity<Page<TurnoResponseDTO>> obtenerTurnosPorNegocio(
             @PathVariable Long negocioId,
-            @RequestParam(defaultValue = "0") int x1,
-            @RequestParam(defaultValue = "20") int x2
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size,
+            Principal principal
     ) {
-        Pageable x3 = PageRequest.of(x1, x2);
-        Page<TurnoResponseDTO> turnos = turnoService.obtenerTurnosPorNegocio(negocioId, x3)
+        Pageable pageable = PageRequest.of(page, size);
+        Page<TurnoResponseDTO> turnos = turnoService.obtenerTurnosPorNegocio(negocioId, pageable, principal.getName())
                 .map(TurnoResponseDTO::new);
         return ResponseEntity.ok(turnos);
     }
 
-    // ... (Tu código existente) ...
-
     @GetMapping("/recurso/{recursoId}/historial")
     public ResponseEntity<Page<TurnoResponseDTO>> obtenerHistorialPorRecurso(
             @PathVariable Long recursoId,
-            @RequestParam(defaultValue = "0") int x1,
-            @RequestParam(defaultValue = "20") int x2,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size,
             Principal principal) {
 
-        Pageable x3 = PageRequest.of(x1, x2);
-        Page<TurnoResponseDTO> turnos = turnoService.obtenerHistorialPorRecurso(recursoId, x3, principal.getName())
+        Pageable pageable = PageRequest.of(page, size);
+        Page<TurnoResponseDTO> turnos = turnoService.obtenerHistorialPorRecurso(recursoId, pageable, principal.getName())
                 .map(TurnoResponseDTO::new);
         return ResponseEntity.ok(turnos);
     }
@@ -98,12 +89,13 @@ public class TurnoController {
     @GetMapping("/recurso/{recursoId}/disponibilidad")
     public ResponseEntity<List<TurnoResponseDTO>> obtenerTurnosOcupados(
             @PathVariable Long recursoId,
-            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fecha) {
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fecha,
+            Principal principal) {
 
         LocalDateTime inicioDia = fecha.atStartOfDay();
         LocalDateTime finDia = fecha.atTime(LocalTime.MAX);
 
-        List<TurnoResponseDTO> lista = turnoService.obtenerTurnosOcupados(recursoId, inicioDia, finDia).stream()
+        List<TurnoResponseDTO> lista = turnoService.obtenerTurnosOcupados(recursoId, inicioDia, finDia, principal.getName()).stream()
                 .map(TurnoResponseDTO::new)
                 .collect(Collectors.toList());
         return ResponseEntity.ok(lista);
@@ -112,27 +104,27 @@ public class TurnoController {
     @GetMapping("/negocio/{negocioId}/reportes")
     public ResponseEntity<ReporteResponseDTO> obtenerReportes(
             @PathVariable Long negocioId,
-            @RequestParam(required = false) Long recursoId, // NUEVO: Parámetro opcional
-            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime x1,
-            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime x2,
+            @RequestParam(required = false) Long recursoId,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime fechaInicio,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime fechaFin,
             Principal principal) {
 
-        return ResponseEntity.ok(turnoService.generarReporteNegocio(negocioId, recursoId, x1, x2, principal.getName()));
+        return ResponseEntity.ok(turnoService.generarReporteNegocio(negocioId, recursoId, fechaInicio, fechaFin, principal.getName()));
     }
 
     @DeleteMapping("/{id}")
-    public ResponseEntity<String> cancelarTurno(@PathVariable Long id) {
-        return ResponseEntity.ok(turnoService.cancelarTurno(id));
+    public ResponseEntity<String> cancelarTurno(@PathVariable Long id, Principal principal) {
+        return ResponseEntity.ok(turnoService.cancelarTurno(id, principal.getName()));
     }
 
     @PatchMapping("/{id}/estado")
     public ResponseEntity<TurnoResponseDTO> actualizarEstado(
             @PathVariable Long id,
-            @RequestParam EstadoTurno nuevoEstado) {
-        return ResponseEntity.ok(new TurnoResponseDTO(turnoService.actualizarEstado(id, nuevoEstado)));
+            @RequestParam EstadoTurno nuevoEstado,
+            Principal principal) {
+        return ResponseEntity.ok(new TurnoResponseDTO(turnoService.actualizarEstado(id, nuevoEstado, principal.getName())));
     }
 
-    // EL NUEVO ENDPOINT DEL CEREBRO
     @GetMapping("/disponibles")
     public ResponseEntity<List<HorarioDisponibleDTO>> obtenerHorariosDisponibles(
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fecha,

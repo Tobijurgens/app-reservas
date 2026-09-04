@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="es"  xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <title>Invitación a AgendApp</title>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f4f4f5; margin: 0; padding: 0; }
+        .container { max-width: 600px; margin: 40px auto; background: #ffffff; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 6px rgba(0,0,0,0.1); border: 1px solid #e5e7eb; }
+        .header { background-color: #0f172a; color: white; padding: 20px; text-align: center; }
+        .header h1 { margin: 0; font-size: 24px; letter-spacing: 1px; }
+        .content { padding: 30px; color: #334155; line-height: 1.6; }
+        .content h2 { color: #0f172a; margin-top: 0; }
+        .highlight { color: #0f172a; font-weight: bold; }
+        .buttons { text-align: center; margin: 35px 0; }
+
+        .btn { display: inline-block; padding: 12px 24px; text-decoration: none; font-weight: bold; border-radius: 6px; margin: 0 10px; font-size: 15px; }
+        .btn-aceptar { background-color: #10b981; color: white; border: 1px solid #059669; }
+        .btn-rechazar { background-color: #ef4444; color: white; border: 1px solid #dc2626; }
+
+        .footer { background-color: #f8fafc; padding: 20px; text-align: center; font-size: 12px; color: #64748b; border-top: 1px solid #e2e8f0; }
+    </style>
+</head>
+<body>
+<div class="container">
+    <div class="header">
+        <h1>AgendApp</h1>
+    </div>
+    <div class="content">
+        <h2>¡Hola! Tenés una nueva invitación</h2>
+        <p>El administrador de <span class="highlight" th:text="${nombreNegocio}">Nombre del Negocio</span> te invitó a unirte a su equipo de trabajo.</p>
+        <p>Se te asignará la agenda para el puesto de: <span class="highlight" th:text="${nombreRecurso}">Nombre del Recurso</span>.</p>
+
+        <p>Por favor, confirmá si querés aceptar o rechazar esta invitación haciendo clic en uno de los siguientes botones:</p>
+
+        <div class="buttons">
+            <a th:href="${linkAceptar}" class="btn btn-aceptar">Aceptar Invitación</a>
+            <a th:href="${linkRechazar}" class="btn btn-rechazar">Rechazar</a>
+        </div>
+
+        <p>Si no esperabas este correo o fue un error, simplemente ignoralo o hacé clic en "Rechazar".</p>
+    </div>
+    <div class="footer">
+        <p>Este es un mensaje automático, por favor no respondas a este correo.</p>
+        <p>&copy; 2026 AgendApp - Sistema de Reservas y Barberías</p>
+    </div>
+</div>
+</body>
+</html>

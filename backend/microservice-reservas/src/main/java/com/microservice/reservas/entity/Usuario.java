@@ -53,7 +53,6 @@ public class Usuario implements UserDetails {
 
     @Override
     public boolean isEnabled() {
-        // Solo puede loguearse si verificó su cuenta
         return this.estadoCuenta == EstadoCuenta.ACTIVO;
     }
 }

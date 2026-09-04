@@ -30,7 +30,6 @@ public class Recurso {
     @Column(columnDefinition = "boolean default true")
     private Boolean activo = true;
 
-    // NUEVO: Sistema de invitaciones
     @Enumerated(EnumType.STRING)
     private EstadoAsociacion estadoAsociacion;
 

@@ -25,6 +25,18 @@ public class AuthController {
     @PostMapping("/login")
     public ResponseEntity<AuthResponse> login(@Valid @RequestBody LoginRequest request) {
         String token = authService.login(request);
-        return ResponseEntity.ok(new AuthResponse(token)); // Ahora sí devuelve JSON
+        return ResponseEntity.ok(new AuthResponse(token));
+    }
+
+    @GetMapping("/verificar")
+    public ResponseEntity<String> verificarCuenta(@RequestParam("token") String token) {
+        try {
+            String resultado = authService.verificarCuenta(token);
+            // Por ahora devolvemos un texto simple.
+            // A futuro, acá podríamos devolver un HTML bonito o redirigir a React.
+            return ResponseEntity.ok(resultado);
+        } catch (RuntimeException e) {
+            return ResponseEntity.badRequest().body(e.getMessage());
+        }
     }
 }

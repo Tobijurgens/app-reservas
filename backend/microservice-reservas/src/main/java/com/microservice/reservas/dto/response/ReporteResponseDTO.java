@@ -10,9 +10,7 @@ public class ReporteResponseDTO {
     private int turnosPendientes;
     private int turnosCancelados;
     private double ingresosTotales;
-    private double tasaCancelacionPorcentaje; // Usamos decimales/porcentajes directos
-
-    // Mapas para saber qué se vende más y quién trabaja más
+    private double tasaCancelacionPorcentaje;
     private Map<String, Long> serviciosPopulares;
     private Map<String, Long> recursosPopulares;
 }

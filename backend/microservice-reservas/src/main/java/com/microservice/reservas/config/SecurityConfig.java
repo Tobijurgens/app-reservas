@@ -21,25 +21,28 @@ public class SecurityConfig {
                 .csrf(AbstractHttpConfigurer::disable)
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
-                        // 1. Lo que ya teníamos: Auth público
                         .requestMatchers("/api/auth/**").permitAll()
+                        .requestMatchers(org.springframework.http.HttpMethod.GET,
+                                "/api/negocios/publico/{alias}",
+                                "/api/recursos/negocio/{negocioId}",
+                                "/api/servicios/recurso/{recursoId}",
+                                "/api/turnos/disponibles",
+                                "/api/recursos/invitacion/aceptar",
+                                "/api/recursos/invitacion/rechazar"
+                        ).permitAll()
+                        .requestMatchers(
+                                "/v3/api-docs/**",
+                                "/swagger-ui/**",
+                                "/swagger-ui.html"
+                        ).permitAll()
 
-                        // 2. GETs públicos: Cualquiera puede ver negocios, recursos y servicios
-                        .requestMatchers(org.springframework.http.HttpMethod.GET, "/api/negocios/**", "/api/recursos/**", "/api/servicios/**", "/api/turnos/disponibles").permitAll()
-
-                        // Rutas públicas de Swagger
-                        .requestMatchers("/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll()
-
-                        // 3. ¡EL RESTO EXIGE TOKEN OBLIGATORIO!
                         .anyRequest().authenticated()
                 )
-                // 4. Importante: Agregamos el filtro que valida el Token en cada petición
                 .addFilterBefore(jwtAuthenticationFilter, org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter.class);
 
         return http.build();
     }
 
-    // Este Bean enseña a Spring a encriptar contraseñas antes de guardarlas en Postgres
     @Bean
     public PasswordEncoder passwordEncoder() {
         return new BCryptPasswordEncoder();
