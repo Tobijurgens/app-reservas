@@ -105,31 +105,11 @@ public class NegocioService {
         negocio.setActivo(false);
         negocioRepository.save(negocio);
 
-        int recursosBorrados = 0;
-        int serviciosBorrados = 0;
-        int turnosCancelados = 0;
+        int serviciosBorrados = servicioRepository.desactivarPorNegocioId(id);
+        int recursosBorrados = recursoRepository.desactivarPorNegocioId(id);
+
         List<EstadoTurno> estadosACancelar = List.of(EstadoTurno.CONFIRMADO);
-
-        List<Recurso> recursos = recursoRepository.findByNegocioIdAndActivoTrue(id);
-        for (Recurso recurso : recursos) {
-            recurso.setActivo(false);
-            recursoRepository.save(recurso);
-            recursosBorrados++;
-
-            List<Servicio> servicios = servicioRepository.findByRecursoIdAndActivoTrue(recurso.getId());
-            for (Servicio servicio : servicios) {
-                servicio.setActivo(false);
-                servicioRepository.save(servicio);
-                serviciosBorrados++;
-            }
-
-            List<Turno> turnos = turnoRepository.findByRecursoIdAndEstadoIn(recurso.getId(), estadosACancelar);
-            for (Turno turno : turnos) {
-                turno.setEstado(EstadoTurno.CANCELADO);
-                turnoRepository.save(turno);
-                turnosCancelados++;
-            }
-        }
+        int turnosCancelados = turnoRepository.actualizarEstadoPorNegocioId(id, EstadoTurno.CANCELADO, estadosACancelar);
 
         return "Negocio dado de baja exitosamente. Se eliminaron " + recursosBorrados +
                 " recursos, " + serviciosBorrados + " servicios y se cancelaron " +

@@ -1,1 +1,93 @@
 @import "tailwindcss";
+
+@theme {
+  --color-app-black: #070707;
+  --color-app-marineblue: #0f6c9b;
+  --color-app-ligthblue: #c7d4f7;
+  --color-app-white: #f7f7f7;
+  --color-app-red: #8b2929;
+  --color-app-yellow: #e0cf35;
+  --color-app-green: #6bbe56;
+}
+/*
+
+:root {
+  --color-app-black: #070707;
+  --color-app-marineblue: #0f6c9b;
+  --color-app-ligthblue: #c7d4f7;
+  --color-app-white: #f7f7f7;
+  --color-app-red: #8b2929;
+  --color-app-yellow: #e0cf35;
+  --color-app-green: #6bbe56;
+
+} */
+
+.react-datepicker {
+  font-family: inherit;
+  border: 1px solid #e5e7eb;
+  border-radius: 1rem;
+  box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+  padding: 0.5rem;
+}
+
+.react-datepicker__triangle {
+  display: none;
+}
+
+.react-datepicker__header {
+  background-color: white;
+  border-bottom: none;
+  padding-top: 0.5rem;
+}
+
+.react-datepicker__current-month {
+  color: #070707; /* var(--color-app-black) */
+  font-size: 1rem;
+  font-weight: 700;
+}
+
+.react-datepicker__day-name {
+  color: #64748b;
+  font-weight: 600;
+  text-transform: capitalize;
+  width: 2.5rem;
+  margin: 0.2rem;
+}
+
+.react-datepicker__day {
+  color: #070707; /* var(--color-app-black) */
+  width: 2.5rem;
+  line-height: 2.5rem;
+  border-radius: 0.5rem;
+  margin: 0.2rem;
+  transition: all 0.2s;
+}
+
+.react-datepicker__day:hover {
+  background-color: #f1f5f9;
+  color: #043a55; /* var(--color-app-marineblue) */
+  border-radius: 0.5rem;
+}
+
+.react-datepicker__day--selected,
+.react-datepicker__day--keyboard-selected {
+  background-color: #043a55 !important; /* var(--color-app-marineblue) */
+  color: white !important;
+  font-weight: bold;
+}
+
+.react-datepicker__day--today {
+  font-weight: bold;
+  border: 1px solid #043a55; /* var(--color-app-marineblue) */
+}
+
+.react-datepicker__day--disabled {
+  color: #cbd5e1;
+  cursor: not-allowed;
+  text-decoration: line-through; 
+}
+
+.react-datepicker__day--disabled:hover {
+  background-color: transparent;
+  color: #cbd5e1;
+}

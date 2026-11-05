@@ -9,13 +9,15 @@ import NegocioPerfil from '../features/publico/pages/NegocioPerfil';
 // Páginas de Auth
 import Login from '../features/auth/pages/Login';
 import Register from '../features/auth/pages/Register';
+import VerificarCuenta from '../features/auth/pages/VerificarCuenta';
+import ProcesarInvitacion from '../features/auth/pages/ProcesarInvitacion';
 
 // Páginas Privadas (Features)
 import Dashboard from '../features/negocios/pages/Dashboard';
 import GestionNegocio from '../features/negocios/pages/GestionNegocio';
 import AgendaPersonal from '../features/negocios/pages/AgendaPersonal';
 import GestionMiTrabajo from '../features/negocios/pages/GestionMiTrabajo';
-import PerfilUsuario from '../features/perfil/pages/PerfilUsuario'; // <-- NUEVO IMPORT
+import PerfilUsuario from '../features/perfil/pages/PerfilUsuario';
 
 const AppRouter = () => {
   return (
@@ -28,6 +30,8 @@ const AppRouter = () => {
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
           <Route path="/negocio/:id" element={<NegocioPerfil />} />
+          <Route path="/verificar" element={<VerificarCuenta />} />
+          <Route path="/invitacion/:accion" element={<ProcesarInvitacion />} />
           
           {/* Rutas Privadas */}
           <Route element={<ProtectedRoute />}>
@@ -35,8 +39,6 @@ const AppRouter = () => {
             <Route path="/dashboard/negocio/:id" element={<GestionNegocio />} />
             <Route path="/dashboard/mi-trabajo/:id" element={<GestionMiTrabajo />} />
             <Route path="/mi-agenda" element={<AgendaPersonal />} />
-            
-            {/* NUEVA RUTA PROTEGIDA: Perfil del Usuario */}
             <Route path="/perfil" element={<PerfilUsuario />} />
           </Route>
         </Routes>

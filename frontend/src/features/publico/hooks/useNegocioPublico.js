@@ -1,5 +1,7 @@
 import { useState, useEffect } from 'react';
-import api from '../../../services/api';
+import { NegociosService } from '../../../services/NegociosService';
+import { RecursosService } from '../../../services/RecursosService';
+import { ServiciosService } from '../../../services/ServiciosService';
 
 export const useNegocioPublico = (id) => {
   const [negocio, setNegocio] = useState(null);
@@ -13,36 +15,25 @@ export const useNegocioPublico = (id) => {
     const fetchData = async () => {
       try {
         setLoading(true);
-        const resNegocio = await api.get(`/negocios/publico/${id}`);
-        const negocioData = resNegocio.data;
+        const negocioData = await NegociosService.obtenerPorAlias(id);
         setNegocio(negocioData);
 
-        const resRecursos = await api.get(`/recursos/negocio/${negocioData.id}`);
-        const recursosData = resRecursos.data;
-
-        // Ojo de Arquitecto: Esto genera el problema N+1 (muchas peticiones al backend).
-        // Para este proyecto está perfecto, pero tenelo en cuenta por si te lo preguntan en una entrevista técnica.
+        const recursosData = await RecursosService.obtenerPorNegocio(negocioData.id);
+        
         const recursosConServicios = await Promise.all(
           recursosData.map(async (recurso) => {
             try {
-              const resServicios = await api.get(`/servicios/recurso/${recurso.id}`);
-              return { ...recurso, servicios: resServicios.data };
+              const servicios = await ServiciosService.obtenerPorRecurso(recurso.id);
+              return { ...recurso, servicios };
             } catch (err) {
               return { ...recurso, servicios: [] };
             }
           })
         );
-
         setRecursos(recursosConServicios);
-
       } catch (err) {
-        setError(
-          err.response?.data?.message || 
-          'No pudimos encontrar este negocio o no está disponible.'
-        );
-      } finally {
-        setLoading(false);
-      }
+        setError(err.response?.data?.message || 'No pudimos encontrar este negocio o no está disponible.');
+      } finally { setLoading(false); }
     };
 
     fetchData();

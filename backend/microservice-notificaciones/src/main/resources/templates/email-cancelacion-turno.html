@@ -2,70 +2,69 @@
 <html xmlns:th="http://www.thymeleaf.org" lang="es">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Turno Cancelado</title>
 </head>
-<body style="margin: 0; padding: 0; font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; background-color: #f3f4f6; color: #333333;">
-
-<table width="100%" border="0" cellspacing="0" cellpadding="0" style="background-color: #f3f4f6; padding: 40px 20px;">
+<body style="margin: 0; padding: 0; font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; background-color: #f7f7f7;">
+<table width="100%" border="0" cellspacing="0" cellpadding="0" style="background-color: #f7f7f7; padding: 40px 20px;">
     <tr>
         <td align="center">
-            <table width="600" border="0" cellspacing="0" cellpadding="0" style="background-color: #ffffff; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);">
-                <!-- Header -->
+            <table width="600" border="0" cellspacing="0" cellpadding="0" style="background-color: #ffffff; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 15px rgba(0, 0, 0, 0.05);">
+                <!-- Header Logo -->
                 <tr>
-                    <td style="background-color: #ef4444; padding: 30px; text-align: center;">
-                        <h1 style="color: #ffffff; margin: 0; font-size: 24px; letter-spacing: 1px;">TURNO CANCELADO</h1>
+                    <td style="background-color: #070707; padding: 25px; text-align: center;">
+                        <h1 style="margin: 0; font-size: 26px; font-weight: 900; letter-spacing: -0.5px; color: #ffffff;">Agend<span style="color: #0f6c9b;">App</span></h1>
                     </td>
                 </tr>
-
+                <!-- Header Danger Bar -->
+                <tr>
+                    <td style="background-color: #8b2929; padding: 15px; text-align: center;">
+                        <h2 style="color: #ffffff; margin: 0; font-size: 16px; letter-spacing: 1px; text-transform: uppercase;">Turno Cancelado</h2>
+                    </td>
+                </tr>
                 <!-- Body -->
                 <tr>
                     <td style="padding: 40px 30px;">
-                        <p style="font-size: 16px; line-height: 1.5; margin: 0 0 20px 0;">
+                        <p style="font-size: 16px; line-height: 1.6; color: #070707; margin: 0 0 20px 0;">
                             Hola <strong th:text="${nombreCliente}">Cliente</strong>,
                         </p>
-                        <p style="font-size: 16px; line-height: 1.5; margin: 0 0 30px 0;">
-                            Te informamos que el siguiente turno en <strong th:text="${nombreNegocio}">Negocio</strong> ha sido cancelado:
+                        <p style="font-size: 16px; line-height: 1.6; color: #4b5563; margin: 0 0 30px 0;">
+                            Te informamos que el siguiente turno en <strong style="color: #0f6c9b;" th:text="${nombreNegocio}">Negocio</strong> ha sido cancelado:
                         </p>
 
-                        <!-- Detalle del Turno Cancelado (Tarjeta gris tachada/atenuada) -->
-                        <table width="100%" border="0" cellspacing="0" cellpadding="20" style="background-color: #fff1f2; border-radius: 6px; border: 1px solid #fecdd3;">
+                        <!-- Detalle del Turno Cancelado -->
+                        <table width="100%" border="0" cellspacing="0" cellpadding="20" style="background-color: #fcfcfc; border-radius: 12px; border: 1px dashed #8b2929;">
                             <tr>
                                 <td>
-                                    <p style="margin: 0 0 10px 0; font-size: 15px; color: #881337;">
-                                        <span>📅 Fecha:</span>
-                                        <strong th:text="${fechaHoraTurno}">01/01/2026 10:00</strong>
+                                    <p style="margin: 0 0 12px 0; font-size: 15px; color: #8b2929; opacity: 0.9;">
+                                        <span style="display: inline-block; width: 80px; font-weight: bold;">- Fecha:</span>
+                                        <strong style="text-decoration: line-through;" th:text="${fechaHoraTurno}">01/01/2026 10:00</strong>
                                     </p>
-                                    <p style="margin: 0 0 10px 0; font-size: 15px; color: #881337;">
-                                        <span>✂️ Servicio:</span>
+                                    <p style="margin: 0 0 12px 0; font-size: 15px; color: #8b2929; opacity: 0.9;">
+                                        <span style="display: inline-block; width: 80px; font-weight: bold;">- Servicio:</span>
                                         <strong th:text="${nombreServicio}">Corte</strong>
                                     </p>
-                                    <p style="margin: 0; font-size: 15px; color: #881337;">
-                                        <span>💈 Con:</span>
+                                    <p style="margin: 0; font-size: 15px; color: #8b2929; opacity: 0.9;">
+                                        <span style="display: inline-block; width: 80px; font-weight: bold;">- Recurso:</span>
                                         <strong th:text="${nombreRecurso}">Profesional</strong>
                                     </p>
                                 </td>
                             </tr>
                         </table>
 
-                        <p style="font-size: 15px; color: #475569; line-height: 1.5; margin: 30px 0 0 0; text-align: center;">
+                        <p style="font-size: 14px; color: #4b5563; line-height: 1.6; margin: 30px 0 0 0; text-align: center;">
                             Si fue un error o deseás buscar un nuevo horario, podés ingresar a la aplicación para reservar nuevamente cuando gustes.
                         </p>
                     </td>
                 </tr>
-
                 <!-- Footer -->
                 <tr>
-                    <td style="background-color: #1e293b; padding: 20px; text-align: center;">
-                        <p style="color: #94a3b8; font-size: 12px; margin: 0;">
-                            Enviado de forma automática por <strong>AgendApp</strong>.
-                        </p>
+                    <td style="background-color: #f7f7f7; padding: 20px; text-align: center; border-top: 1px solid #eaeaea;">
+                        <p style="color: #9ca3af; font-size: 12px; margin: 0;">Enviado de forma automática por <strong>AgendApp</strong>.</p>
                     </td>
                 </tr>
             </table>
         </td>
     </tr>
 </table>
-
 </body>
 </html>

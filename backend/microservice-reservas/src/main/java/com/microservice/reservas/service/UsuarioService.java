@@ -1,5 +1,6 @@
 package com.microservice.reservas.service;
 
+import com.microservice.reservas.dto.event.UsuarioEliminadoEvent;
 import com.microservice.reservas.dto.request.ActualizarPerfilRequest;
 import com.microservice.reservas.entity.*;
 import com.microservice.reservas.enums.EstadoAsociacion;
@@ -7,6 +8,7 @@ import com.microservice.reservas.enums.EstadoCuenta;
 import com.microservice.reservas.enums.EstadoTurno;
 import com.microservice.reservas.repository.*;
 import lombok.RequiredArgsConstructor;
+import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -22,6 +24,7 @@ public class UsuarioService {
     private final NegocioRepository negocioRepository;
     private final NegocioService negocioService;
     private final RecursoRepository recursoRepository;
+    private final RabbitTemplate rabbitTemplate;
 
     public Usuario actualizarPerfil(String emailLogueado, ActualizarPerfilRequest request) {
         Usuario usuario = usuarioRepository.findByEmailAndEstadoCuenta(emailLogueado, EstadoCuenta.ACTIVO)
@@ -78,16 +81,18 @@ public class UsuarioService {
             negociosBorrados++;
         }
 
-        List<Recurso> recursosAsignados = recursoRepository.findByUsuarioEmailAndActivoTrue(usuario.getEmail());
+        List<Recurso> recursosAsignados = recursoRepository.findByUsuarioEmailAndActivoTrueOrderByNombreAsc(usuario.getEmail());
         int recursosDesvinculados = 0;
 
         for (Recurso recurso : recursosAsignados) {
             recurso.setUsuario(null);
             recurso.setTokenInvitacion(null);
-            recurso.setEstadoAsociacion(EstadoAsociacion.ACTIVO); // Vuelve a ser un recurso genérico disponible
+            recurso.setEstadoAsociacion(EstadoAsociacion.ACTIVO);
             recursoRepository.save(recurso);
             recursosDesvinculados++;
         }
+
+        rabbitTemplate.convertAndSend("notificaciones.exchange", "usuario.eliminado.routing.key", new UsuarioEliminadoEvent(usuario.getEmail()));
 
         return "Usuario eliminado lógicamente. Se cancelaron " + turnosAfectados.size() +
                 " turnos como cliente, se dieron de baja " + negociosBorrados +

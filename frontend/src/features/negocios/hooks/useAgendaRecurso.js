@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import api from '../../../services/api';
+import { TurnosService } from '../../../services/TurnosService';
 
 export const useAgendaRecurso = (recursoId) => {
   const [turnos, setTurnos] = useState([]);
@@ -7,30 +7,21 @@ export const useAgendaRecurso = (recursoId) => {
 
   useEffect(() => {
     if (!recursoId) return;
-
     const fetchAgenda = async () => {
       try {
         setLoading(true);
-        const response = await api.get(`/turnos/agenda/${recursoId}`);
-        setTurnos(response.data);
-      } catch (error) {
-        console.error('Error al cargar agenda del recurso:', error);
-      } finally {
-        setLoading(false);
-      }
+        const data = await TurnosService.obtenerAgendaRecurso(recursoId);
+        setTurnos(data);
+      } catch (error) { console.error('Error al cargar agenda del recurso:', error); } 
+      finally { setLoading(false); }
     };
-
     fetchAgenda();
   }, [recursoId]);
 
   const cancelarTurno = async (idTurno) => {
     try {
-      await api.delete(`/turnos/${idTurno}`);
-      setTurnos(turnosAnteriores => 
-        turnosAnteriores.map(turno => 
-          turno.id === idTurno ? { ...turno, estado: 'CANCELADO' } : turno
-        )
-      );
+      await TurnosService.cancelarTurno(idTurno);
+      setTurnos(prev => prev.map(t => t.id === idTurno ? { ...t, estado: 'CANCELADO' } : t));
       return true;
     } catch (error) {
       alert(error.response?.data?.message || 'Error al cancelar el turno.');

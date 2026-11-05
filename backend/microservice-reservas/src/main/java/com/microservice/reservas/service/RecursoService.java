@@ -1,5 +1,6 @@
 package com.microservice.reservas.service;
 
+import com.microservice.reservas.dto.event.AvisoInternoEvent;
 import com.microservice.reservas.dto.event.InvitacionEmpleadoEvent;
 import com.microservice.reservas.dto.request.RecursoDTO;
 import com.microservice.reservas.dto.request.HorarioSemanalDTO;
@@ -78,6 +79,10 @@ public class RecursoService {
         recurso.setEstadoAsociacion(EstadoAsociacion.ACTIVO);
         recurso.setTokenInvitacion(null);
         recursoRepository.save(recurso);
+
+        rabbitTemplate.convertAndSend("notificaciones.exchange", "avisos.internos.routing.key",
+                new AvisoInternoEvent(recurso.getNegocio().getOwner().getEmail(), "Invitación Aceptada", recurso.getUsuario().getEmail() + " aceptó la invitación para " + recurso.getNombre()));
+
         return "¡Invitación aceptada exitosamente!";
     }
 
@@ -88,8 +93,13 @@ public class RecursoService {
 
         recurso.setEstadoAsociacion(EstadoAsociacion.RECHAZADO);
         recurso.setTokenInvitacion(null);
+        Usuario usuarioTemp = recurso.getUsuario();
         recurso.setUsuario(null);
         recursoRepository.save(recurso);
+
+        rabbitTemplate.convertAndSend("notificaciones.exchange", "avisos.internos.routing.key",
+                new AvisoInternoEvent(recurso.getNegocio().getOwner().getEmail(), "Invitación Rechazada", (usuarioTemp != null ? usuarioTemp.getEmail() : "Un usuario") + " rechazó tu invitación para " + recurso.getNombre()));
+
         return "Invitación rechazada.";
     }
 
@@ -147,11 +157,11 @@ public class RecursoService {
     }
 
     public List<Recurso> obtenerPorNegocio(Long negocioId) {
-        return recursoRepository.findByNegocioIdAndActivoTrue(negocioId);
+        return recursoRepository.findByNegocioIdAndActivoTrueOrderByNombreAsc(negocioId);
     }
 
     public List<Recurso> obtenerTodosPorNegocio(Long negocioId) {
-        return recursoRepository.findByNegocioId(negocioId);
+        return recursoRepository.findByNegocioIdOrderByNombreAsc(negocioId);
     }
 
     @Transactional
@@ -189,7 +199,7 @@ public class RecursoService {
     }
 
     public List<Recurso> obtenerMisAsignaciones(String emailLogueado) {
-        return recursoRepository.findByUsuarioEmailAndActivoTrue(emailLogueado);
+        return recursoRepository.findByUsuarioEmailAndActivoTrueOrderByNombreAsc(emailLogueado);
     }
 
     private void dispararEventoInvitacion(Recurso recurso) {

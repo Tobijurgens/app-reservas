@@ -32,8 +32,6 @@ public class AuthController {
     public ResponseEntity<String> verificarCuenta(@RequestParam("token") String token) {
         try {
             String resultado = authService.verificarCuenta(token);
-            // Por ahora devolvemos un texto simple.
-            // A futuro, acá podríamos devolver un HTML bonito o redirigir a React.
             return ResponseEntity.ok(resultado);
         } catch (RuntimeException e) {
             return ResponseEntity.badRequest().body(e.getMessage());

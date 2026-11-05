@@ -3,6 +3,7 @@ package com.microservice.reservas.repository;
 import com.microservice.reservas.enums.EstadoTurno;
 import com.microservice.reservas.entity.Turno;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
@@ -60,4 +61,9 @@ public interface TurnoRepository extends JpaRepository<Turno,Long>{
             @Param("recursoId") Long recursoId,
             @Param("fechaInicio") LocalDateTime fechaInicio,
             @Param("fechaFin") LocalDateTime fechaFin);
+
+    @Modifying
+    @Query("UPDATE Turno t SET t.estado = :nuevoEstado WHERE t.recurso.negocio.id = :negocioId AND t.estado IN :estados")
+    int actualizarEstadoPorNegocioId(@Param("negocioId") Long negocioId, @Param("nuevoEstado") EstadoTurno nuevoEstado, @Param("estados") List<EstadoTurno> estados);
+
 }

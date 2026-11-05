@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
-import HorariosSemana from './HorariosSemana'; // IMPORTAMOS EL COMPONENTE
+import HorariosSemana from './HorariosSemana'; 
+import { ordenarHorariosPorDia } from '../../../utils/fechas'; 
 
 const NegocioForm = ({ initialData, onSubmit, onCancel, isSubmitting }) => {
   const [formData, setFormData] = useState({
@@ -14,8 +15,8 @@ const NegocioForm = ({ initialData, onSubmit, onCancel, isSubmitting }) => {
         descripcion: initialData.descripcion || '',
         direccion: initialData.direccion || '',
         telefono: initialData.telefono || '',
-        emailContacto: initialData.emailContacto || '', // <-- AHORA CARGA EL EMAIL SI EXISTE
-        horarios: initialData.horarios || []
+        emailContacto: initialData.emailContacto || '',
+        horarios: ordenarHorariosPorDia(initialData.horarios)
       });
     }
   }, [initialData]);
@@ -34,8 +35,6 @@ const NegocioForm = ({ initialData, onSubmit, onCancel, isSubmitting }) => {
 
   const handleSubmit = (e) => {
     e.preventDefault();
-
-    // Limpiamos strings vacíos a null para el backend
     const payload = {
       ...formData,
       horarios: formData.horarios.map(h => ({
@@ -44,47 +43,45 @@ const NegocioForm = ({ initialData, onSubmit, onCancel, isSubmitting }) => {
         horaFinDescanso: h.horaFinDescanso || null
       }))
     };
-
     onSubmit(payload);
   };
 
   return (
-    <section className="max-w-4xl mx-auto bg-white p-6 rounded-xl shadow-sm border border-gray-100">
-      <header className="flex items-center justify-between mb-6">
-        <h2 className="text-2xl font-bold text-gray-900">{initialData?.id ? 'Editar negocio' : 'Crear nuevo negocio'}</h2>
-        <button type="button" onClick={onCancel} className="text-gray-500 hover:text-gray-700 text-sm font-medium">Volver atrás</button>
+    <section className="max-w-4xl mx-auto bg-white p-8 rounded-2xl shadow-sm border border-gray-100">
+      <header className="flex items-center justify-between mb-8">
+        <h2 className="text-2xl font-bold text-app-black">{initialData?.id ? 'Editar negocio' : 'Crear nuevo negocio'}</h2>
+        <button type="button" onClick={onCancel} className="text-app-marineblue hover:text-app-black text-sm font-medium transition-colors">Volver atrás</button>
       </header>
 
-      <form onSubmit={handleSubmit} className="space-y-4">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <form onSubmit={handleSubmit} className="space-y-5">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
           <div>
-            <label htmlFor="nombre" className="block text-gray-700 text-sm font-bold mb-2">Nombre del Negocio</label>
-            <input id="nombre" type="text" className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500" value={formData.nombre} onChange={handleChange} required />
+            <label htmlFor="nombre" className="block text-app-marineblue text-sm font-bold mb-2">Nombre del Negocio</label>
+            <input id="nombre" type="text" className="w-full px-4 py-3 bg-gray-50 border-none rounded-xl focus:ring-2 focus:ring-app-marineblue text-app-black transition-shadow" value={formData.nombre} onChange={handleChange} required />
           </div>
           <div>
-            <label htmlFor="alias" className="block text-gray-700 text-sm font-bold mb-2">Alias (URL)</label>
-            <input id="alias" type="text" className="w-full px-4 py-2 border rounded-lg bg-gray-50 focus:ring-2 focus:ring-blue-500" value={formData.alias} onChange={handleChange} required />
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div>
-            <label htmlFor="direccion" className="block text-gray-700 text-sm font-bold mb-2">Dirección</label>
-            <input id="direccion" type="text" className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500" value={formData.direccion} onChange={handleChange} required />
-          </div>
-          <div>
-            <label htmlFor="telefono" className="block text-gray-700 text-sm font-bold mb-2">Teléfono</label>
-            <input id="telefono" type="tel" className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500" value={formData.telefono} onChange={handleChange} required />
+            <label htmlFor="alias" className="block text-app-marineblue text-sm font-bold mb-2">Alias (URL)</label>
+            <input id="alias" type="text" className="w-full px-4 py-3 bg-gray-100 border-none rounded-xl focus:ring-2 focus:ring-app-marineblue text-gray-500 transition-shadow" value={formData.alias} onChange={handleChange} required />
           </div>
         </div>
 
-        {/* NUEVO CAMPO: EMAIL DE CONTACTO */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+          <div>
+            <label htmlFor="direccion" className="block text-app-marineblue text-sm font-bold mb-2">Dirección</label>
+            <input id="direccion" type="text" className="w-full px-4 py-3 bg-gray-50 border-none rounded-xl focus:ring-2 focus:ring-app-marineblue text-app-black transition-shadow" value={formData.direccion} onChange={handleChange} required />
+          </div>
+          <div>
+            <label htmlFor="telefono" className="block text-app-marineblue text-sm font-bold mb-2">Teléfono</label>
+            <input id="telefono" type="tel" className="w-full px-4 py-3 bg-gray-50 border-none rounded-xl focus:ring-2 focus:ring-app-marineblue text-app-black transition-shadow" value={formData.telefono} onChange={handleChange} required />
+          </div>
+        </div>
+
         <div>
-          <label htmlFor="emailContacto" className="block text-gray-700 text-sm font-bold mb-2">Email de Contacto (Público)</label>
+          <label htmlFor="emailContacto" className="block text-app-marineblue text-sm font-bold mb-2">Email de Contacto (Público)</label>
           <input 
             id="emailContacto" 
             type="email" 
-            className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500" 
+            className="w-full px-4 py-3 bg-gray-50 border-none rounded-xl focus:ring-2 focus:ring-app-marineblue text-app-black transition-shadow" 
             value={formData.emailContacto} 
             onChange={handleChange} 
             placeholder="Ej: info@milocal.com (Opcional)" 
@@ -92,15 +89,14 @@ const NegocioForm = ({ initialData, onSubmit, onCancel, isSubmitting }) => {
         </div>
 
         <div>
-          <label htmlFor="descripcion" className="block text-gray-700 text-sm font-bold mb-2">Descripción</label>
-          <textarea id="descripcion" rows="3" className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500" value={formData.descripcion} onChange={handleChange} />
+          <label htmlFor="descripcion" className="block text-app-marineblue text-sm font-bold mb-2">Descripción</label>
+          <textarea id="descripcion" rows="3" className="w-full px-4 py-3 bg-gray-50 border-none rounded-xl focus:ring-2 focus:ring-app-marineblue text-app-black transition-shadow resize-none" value={formData.descripcion} onChange={handleChange} />
         </div>
 
-        {/* INYECTAMOS LA GRILLA DE HORARIOS */}
         <HorariosSemana horarios={formData.horarios} setHorarios={handleHorariosChange} />
 
-        <footer className="flex justify-end pt-4">
-          <button type="submit" disabled={isSubmitting} className={`px-6 py-2 rounded-lg text-white font-bold transition-colors ${isSubmitting ? 'bg-blue-400' : 'bg-blue-600 hover:bg-blue-700'}`}>
+        <footer className="flex justify-end pt-6 border-t border-gray-100">
+          <button type="submit" disabled={isSubmitting} className={`px-8 py-3 rounded-xl text-white font-bold transition-all shadow-sm ${isSubmitting ? 'bg-gray-300 cursor-not-allowed' : 'bg-app-marineblue hover:bg-app-black/90 transition-colors duration-300'}`}>
             {isSubmitting ? 'Guardando...' : 'Guardar Negocio'}
           </button>
         </footer>

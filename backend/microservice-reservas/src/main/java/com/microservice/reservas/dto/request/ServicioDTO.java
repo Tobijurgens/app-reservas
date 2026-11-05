@@ -1,5 +1,6 @@
 package com.microservice.reservas.dto.request;
 
+import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
@@ -13,11 +14,11 @@ public class ServicioDTO {
 
     private String descripcion;
 
-    @Positive(message = "El precio debe ser mayor a 0")
+    @Min(value= 0, message = "El precio debe ser mayor a 0")
     private Double precio;
 
     @NotNull(message = "La duración es obligatoria")
-    @Positive(message = "La duración en minutos debe ser mayor a 0")
+    @Min(value = 5, message = "La duración en minutos debe ser mayor o igual a 5")
     private Integer duracionMinutos;
 
     @NotNull(message = "Debe asociar este servicio a un recurso")

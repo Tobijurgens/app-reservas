@@ -134,4 +134,13 @@ public class TurnoController {
         List<HorarioDisponibleDTO> disponibles = turnoService.obtenerHorariosDisponibles(fecha, idRecurso, idServicio);
         return ResponseEntity.ok(disponibles);
     }
+
+    @GetMapping("/dias-llenos")
+    public ResponseEntity<List<LocalDate>> obtenerDiasLlenos(
+            @RequestParam int anio,
+            @RequestParam int mes,
+            @RequestParam Long idRecurso,
+            @RequestParam Long idServicio) {
+        return ResponseEntity.ok(turnoService.obtenerDiasLlenos(anio, mes, idRecurso, idServicio));
+    }
 }

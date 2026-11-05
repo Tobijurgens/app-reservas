@@ -35,4 +35,9 @@ public class HistorialNotificacion {
 
     @Column(columnDefinition = "TEXT")
     private String detalleError;
+
+    private String titulo;
+    private String mensaje;
+    private boolean leida = false;
+    private boolean soloInApp = false;
 }

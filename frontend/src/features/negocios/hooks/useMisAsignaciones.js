@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import api from '../../../services/api';
+import { RecursosService } from '../../../services/RecursosService';
 
 export const useMisAsignaciones = () => {
   const [asignaciones, setAsignaciones] = useState([]);
@@ -8,13 +8,10 @@ export const useMisAsignaciones = () => {
   useEffect(() => {
     const fetchAsignaciones = async () => {
       try {
-        const response = await api.get('/recursos/mis-asignaciones');
-        setAsignaciones(response.data);
-      } catch (error) {
-        console.error('Error al cargar asignaciones:', error);
-      } finally {
-        setLoading(false);
-      }
+        const data = await RecursosService.obtenerMisAsignaciones();
+        setAsignaciones(data);
+      } catch (error) { console.error('Error al cargar asignaciones:', error); } 
+      finally { setLoading(false); }
     };
     fetchAsignaciones();
   }, []);

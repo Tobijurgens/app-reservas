@@ -27,6 +27,7 @@ public class SecurityConfig {
                                 "/api/recursos/negocio/{negocioId}",
                                 "/api/servicios/recurso/{recursoId}",
                                 "/api/turnos/disponibles",
+                                "/api/turnos/dias-llenos",
                                 "/api/recursos/invitacion/aceptar",
                                 "/api/recursos/invitacion/rechazar"
                         ).permitAll()

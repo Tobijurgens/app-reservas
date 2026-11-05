@@ -1,17 +1,45 @@
 <!DOCTYPE html>
-<html lang="es" xmlns:th="http://www.thymeleaf.org">
-<body style="font-family: Arial, sans-serif; padding: 20px; color: #333;">
-<h2 style="color: #0056b3;" th:text="'¡Hola, ' + ${nombre} + '!'">¡Hola!</h2>
-<p>Gracias por registrarte en AgendApp. Ya casi estamos listos.</p>
-<p>Por favor, hacé clic en el siguiente botón para verificar tu cuenta y activarla:</p>
+<html xmlns:th="http://www.thymeleaf.org" lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Verificá tu cuenta</title>
+</head>
+<body style="margin: 0; padding: 0; font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; background-color: #f7f7f7;">
+<table width="100%" border="0" cellspacing="0" cellpadding="0" style="background-color: #f7f7f7; padding: 40px 20px;">
+    <tr>
+        <td align="center">
+            <table width="600" border="0" cellspacing="0" cellpadding="0" style="background-color: #ffffff; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 15px rgba(0, 0, 0, 0.05);">
+                <!-- Header Logo -->
+                <tr>
+                    <td style="background-color: #070707; padding: 25px; text-align: center;">
+                        <h1 style="margin: 0; font-size: 26px; font-weight: 900; letter-spacing: -0.5px; color: #ffffff;">Agend<span style="color: #0f6c9b;">App</span></h1>
+                    </td>
+                </tr>
+                <!-- Body -->
+                <tr>
+                    <td style="padding: 40px 30px;">
+                        <h2 style="color: #070707; margin-top: 0; font-size: 22px;" th:text="'¡Hola, ' + ${nombre} + '!'">¡Hola!</h2>
+                        <p style="font-size: 16px; line-height: 1.6; color: #4b5563; margin: 0 0 20px 0;">Gracias por registrarte en AgendApp. Ya casi estamos listos para que empieces a gestionar todo en un solo lugar.</p>
+                        <p style="font-size: 16px; line-height: 1.6; color: #4b5563; margin: 0 0 35px 0;">Por favor, hacé clic en el siguiente botón para verificar tu cuenta y activarla:</p>
 
-<a th:href="${enlace}"
-   style="display: inline-block; padding: 10px 20px; margin-top: 15px; background-color: #28a745; color: white; text-decoration: none; border-radius: 5px;">
-    Activar mi cuenta
-</a>
+                        <div style="text-align: center;">
+                            <a th:href="${enlace}" style="display: inline-block; padding: 14px 32px; background-color: #0f6c9b; color: #ffffff; text-decoration: none; border-radius: 12px; font-weight: bold; font-size: 16px;">Activar mi cuenta</a>
+                        </div>
 
-<p style="margin-top: 30px; font-size: 12px; color: #777;">
-    Si no solicitaste este registro, podés ignorar este correo.
-</p>
+                        <p style="font-size: 13px; color: #9ca3af; line-height: 1.5; margin: 40px 0 0 0; text-align: center;">
+                            Si no solicitaste este registro, podés ignorar este correo de forma segura.
+                        </p>
+                    </td>
+                </tr>
+                <!-- Footer -->
+                <tr>
+                    <td style="background-color: #f7f7f7; padding: 20px; text-align: center; border-top: 1px solid #eaeaea;">
+                        <p style="color: #9ca3af; font-size: 12px; margin: 0;">Enviado de forma automática por <strong>AgendApp</strong>.</p>
+                    </td>
+                </tr>
+            </table>
+        </td>
+    </tr>
+</table>
 </body>
 </html>

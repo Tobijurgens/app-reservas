@@ -1,19 +1,8 @@
 import { createContext, useState, useEffect } from 'react';
-import api from '../services/api';
+import { AuthService } from '../services/AuthService';
+import { jwtDecode } from 'jwt-decode';
 
 export const AuthContext = createContext();
-
-// Función nativa para leer un JWT sin instalar librerías externas
-const decodificarToken = (token) => {
-  try {
-    const base64Url = token.split('.')[1];
-    const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
-    return JSON.parse(atob(base64));
-  } catch (e) {
-    console.error("Error al decodificar el token", e);
-    return null;
-  }
-};
 
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
@@ -22,23 +11,31 @@ export const AuthProvider = ({ children }) => {
   useEffect(() => {
     const checkToken = () => {
       const token = localStorage.getItem('token');
-      // Intentamos leer el email guardado, o sacarlo del token si falta
       let email = localStorage.getItem('userEmail'); 
-      
       if (token) {
-        const payload = decodificarToken(token);
-        if (payload) {
-             if(!email){
-                 email = payload.sub || payload.email;
-             }
-          // Guardamos el perfil completo
-          setUser({ 
-            token: token, 
-            email: email 
-          });
-        } else {
+        try {
+          const payload = jwtDecode(token);
+          if (payload) {
+            if (!email) email = payload.sub || payload.email;
+            const expirationTime = payload.exp * 1000;
+            const timeUntilExp = expirationTime - Date.now();
+
+            if (timeUntilExp <= 0) {
+              localStorage.removeItem('token');
+              localStorage.removeItem('userEmail');
+              setUser(null);
+            } else {
+              setUser({ token, email });
+              setTimeout(() => {
+                logout();
+                window.location.href = '/login';
+              }, timeUntilExp);
+            }
+          }
+        } catch (error) {
           localStorage.removeItem('token');
           localStorage.removeItem('userEmail');
+          setUser(null);
         }
       }
       setLoading(false);
@@ -48,26 +45,31 @@ export const AuthProvider = ({ children }) => {
 
   const login = async (email, password) => {
     try {
-      const response = await api.post('/auth/login', { email, password });
-      const token = response.data.token; 
-      
-      const payload = decodificarToken(token);
+      const response = await AuthService.login({ email, password });
+      const token = response.token; 
+      const payload = jwtDecode(token);
       const emailFinal = payload?.sub || payload?.email || email;
       
       localStorage.setItem('token', token);
-      localStorage.setItem('userEmail', emailFinal); // Guardamos el email
-      
-      setUser({ 
-        token: token, 
-        email: emailFinal 
-      });
+      localStorage.setItem('userEmail', emailFinal);
+      setUser({ token, email: emailFinal });
       
       return { success: true };
     } catch (error) {
-      return { 
-        success: false, 
-        message: error.response?.data?.message || 'Error al iniciar sesión' 
-      };
+      let msg = error.response?.data?.message || error.response?.data || 'Error al iniciar sesión';
+      
+      if (typeof msg === 'string') {
+        const msgLower = msg.toLowerCase();
+        
+        if (msgLower.includes('disabled') || msgLower.includes('deshabilitado')) {
+          msg = 'Tu cuenta aún no está verificada. Por favor, revisá tu correo y activala para poder ingresar.';
+        } 
+        else if (msgLower.includes('bad credentials') || msgLower.includes('credenciales')) {
+          msg = 'El correo o la contraseña son incorrectos. Intentá nuevamente.';
+        }
+      }
+
+      return { success: false, message: msg };
     }
   };
 

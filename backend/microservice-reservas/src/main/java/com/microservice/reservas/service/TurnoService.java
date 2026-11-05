@@ -1,5 +1,6 @@
 package com.microservice.reservas.service;
 
+import com.microservice.reservas.dto.event.AvisoInternoEvent;
 import com.microservice.reservas.dto.event.TurnoEvent;
 import com.microservice.reservas.dto.request.TurnoDTO;
 import com.microservice.reservas.dto.response.HorarioDisponibleDTO;
@@ -62,7 +63,7 @@ public class TurnoService {
 
         boolean ocupado = turnoRepository.existeSolapamiento(recurso.getId(), fechaInicio, fechaFin, estadoIgnorado);
         if (ocupado) {
-            throw new RuntimeException("El horario seleccionado ya no se encuentra disponible. Por favor, elegí otro.");
+            throw new RuntimeException("El horario seleccionado ya no se encuentra disponible. Por favor, elige otro.");
         }
 
         Turno turno = new Turno();
@@ -77,6 +78,16 @@ public class TurnoService {
 
         dispararEventoTurno(turnoGuardado, "CONFIRMACION");
 
+        String nombreCliente = cliente.getNombre() + " " + cliente.getApellido();
+        String nombreNegocio = recurso.getNegocio().getNombre();
+
+        rabbitTemplate.convertAndSend("notificaciones.exchange", "avisos.internos.routing.key",
+                new AvisoInternoEvent(recurso.getNegocio().getOwner().getEmail(), "Nuevo Turno", nombreCliente + " reservó en " + nombreNegocio + "con " + recurso.getNombre()));
+
+        if (recurso.getUsuario() != null && !recurso.getUsuario().getEmail().equals(recurso.getNegocio().getOwner().getEmail())) {
+            rabbitTemplate.convertAndSend("notificaciones.exchange", "avisos.internos.routing.key",
+                    new AvisoInternoEvent(recurso.getUsuario().getEmail(), "Nuevo Turno Asignado", nombreCliente + " reservó con vos en " + nombreNegocio));
+        }
         return turnoGuardado;
     }
 
@@ -156,6 +167,18 @@ public class TurnoService {
 
         dispararEventoTurno(turnoCancelado, "CANCELACION");
 
+        String nombreCliente = turno.getCliente().getNombre() + " " + turno.getCliente().getApellido();
+
+        // Aviso al dueño
+        rabbitTemplate.convertAndSend("notificaciones.exchange", "avisos.internos.routing.key",
+                new AvisoInternoEvent(turno.getRecurso().getNegocio().getOwner().getEmail(), "Turno Cancelado", nombreCliente + " canceló su turno."));
+
+        // Aviso al recurso
+        if (turno.getRecurso().getUsuario() != null && !turno.getRecurso().getUsuario().getEmail().equals(turno.getRecurso().getNegocio().getOwner().getEmail())) {
+            rabbitTemplate.convertAndSend("notificaciones.exchange", "avisos.internos.routing.key",
+                    new AvisoInternoEvent(turno.getRecurso().getUsuario().getEmail(), "Turno Cancelado", nombreCliente + " canceló su turno con vos."));
+        }
+
         return "Turno cancelado correctamente.";
     }
 
@@ -166,71 +189,131 @@ public class TurnoService {
 
         Recurso recurso = recursoRepository.findByIdAndActivoTrue(recursoId)
                 .orElseThrow(() -> new RuntimeException("Recurso no encontrado"));
-        Negocio negocio = recurso.getNegocio();
         Servicio servicio = servicioRepository.findByIdAndActivoTrue(servicioId)
                 .orElseThrow(() -> new RuntimeException("Servicio no encontrado"));
 
-        DayOfWeek dia = fecha.getDayOfWeek();
+        DayOfWeek diaHoy = fecha.getDayOfWeek();
+        DayOfWeek diaAyer = fecha.minusDays(1).getDayOfWeek();
 
-        HorarioNegocio hNegocio = negocio.getHorarios().stream()
-                .filter(h -> h.getDiaSemana() == dia && h.getAbierto())
+        HorarioRecurso hRecursoHoy = recurso.getHorarios().stream()
+                .filter(h -> h.getDiaSemana() == diaHoy && h.getActivo())
                 .findFirst().orElse(null);
 
-        if (hNegocio == null) return new ArrayList<>();
-
-        HorarioRecurso hRecurso = recurso.getHorarios().stream()
-                .filter(h -> h.getDiaSemana() == dia && h.getActivo())
+        HorarioRecurso hRecursoAyer = recurso.getHorarios().stream()
+                .filter(h -> h.getDiaSemana() == diaAyer && h.getActivo())
                 .findFirst().orElse(null);
 
-        if (hRecurso == null) return new ArrayList<>();
+        List<BloqueTiempo> bloquesCompletos = new ArrayList<>();
 
-        List<Rango> bloquesEfectivos = calcularInterseccion(hNegocio, hRecurso);
+        // 1. Armar la línea de tiempo real de AYER
+        if (hRecursoAyer != null) {
+            bloquesCompletos.addAll(generarBloquesAbsolutos(fecha.minusDays(1), hRecursoAyer, true));
+        }
+
+        // 2. Armar la línea de tiempo real de HOY
+        if (hRecursoHoy != null) {
+            bloquesCompletos.addAll(generarBloquesAbsolutos(fecha, hRecursoHoy, false));
+        }
+
+        // 3. Filtrar con un "molde": Solo nos quedamos con los pedazos de tiempo que caen exactamente en el día que el cliente tocó (de 00:00 a 23:59)
+        LocalDateTime inicioDiaFiltro = fecha.atStartOfDay();
+        LocalDateTime finDiaFiltro = fecha.atTime(LocalTime.MAX);
+
+        List<BloqueTiempo> bloquesEfectivos = new ArrayList<>();
+        for (BloqueTiempo b : bloquesCompletos) {
+            LocalDateTime maxInicio = b.inicio.isAfter(inicioDiaFiltro) ? b.inicio : inicioDiaFiltro;
+            LocalDateTime minFin = b.fin.isBefore(finDiaFiltro) ? b.fin : finDiaFiltro;
+
+            // Si hay intersección válida, lo guardamos
+            if (maxInicio.isBefore(minFin)) {
+                bloquesEfectivos.add(new BloqueTiempo(maxInicio, minFin, b.esDeAyer));
+            }
+        }
+
+        // Ordenamos estrictamente por orden cronológico de los bloques
+        bloquesEfectivos.sort(Comparator.comparing(b -> b.inicio));
 
         List<HorarioDisponibleDTO> horarios = new ArrayList<>();
         int duracionServicio = servicio.getDuracionMinutos();
         DateTimeFormatter formatterHora = DateTimeFormatter.ofPattern("HH:mm");
 
-        for (Rango bloque : bloquesEfectivos) {
-            LocalDateTime inicioBloque = fecha.atTime(bloque.inicio);
-            LocalDateTime finBloque = fecha.atTime(bloque.fin);
-
+        for (BloqueTiempo bloque : bloquesEfectivos) {
             List<Turno> turnosDelBloque = turnoRepository.findTurnosOcupados(
-                    recursoId, inicioBloque, finBloque, EstadoTurno.CANCELADO
+                    recursoId, bloque.inicio, bloque.fin, EstadoTurno.CANCELADO
             );
             turnosDelBloque.sort(Comparator.comparing(Turno::getFechaHoraInicio));
 
-            LocalDateTime puntero = inicioBloque;
+            LocalDateTime puntero = bloque.inicio;
 
             for (Turno turnoOcupado : turnosDelBloque) {
                 LocalDateTime inicioTurnoOcupado = turnoOcupado.getFechaHoraInicio();
                 LocalDateTime finTurnoOcupado = turnoOcupado.getFechaHoraFin();
 
                 while (!puntero.plusMinutes(duracionServicio).isAfter(inicioTurnoOcupado)) {
-                    horarios.add(new HorarioDisponibleDTO(puntero.format(formatterHora), puntero.toString(), true));
+                    if (!puntero.plusMinutes(duracionServicio).isAfter(bloque.fin)) {
+                        horarios.add(new HorarioDisponibleDTO(puntero.format(formatterHora), puntero.toString(), true));
+                    }
                     puntero = puntero.plusMinutes(duracionServicio);
                 }
-
                 if (puntero.isBefore(finTurnoOcupado)) {
                     puntero = finTurnoOcupado;
                 }
             }
 
-            while (!puntero.plusMinutes(duracionServicio).isAfter(finBloque)) {
+            while (!puntero.plusMinutes(duracionServicio).isAfter(bloque.fin)) {
                 horarios.add(new HorarioDisponibleDTO(puntero.format(formatterHora), puntero.toString(), true));
                 puntero = puntero.plusMinutes(duracionServicio);
             }
         }
 
-        LocalDate hoy = LocalDate.now();
-        if (fecha.equals(hoy)) {
-            LocalTime ahora = LocalTime.now();
-            horarios.removeIf(h -> {
-                LocalTime horaDelTurno = LocalTime.parse(h.getHora());
-                return horaDelTurno.isBefore(ahora);
-            });
+        // Eliminamos los duplicados generados por la lógica de solapamiento
+        List<HorarioDisponibleDTO> horariosUnicos = horarios.stream()
+                .distinct()
+                .collect(Collectors.toList());
+
+        // Eliminamos los turnos que ya pasaron el día de hoy
+        LocalDateTime ahora = LocalDateTime.now();
+        horariosUnicos.removeIf(h -> LocalDateTime.parse(h.getFechaHoraISO()).isBefore(ahora));
+
+        // 🔥 ORDEN FINAL ESTRICTO POR FECHA Y HORA ABSOLUTA 🔥
+        // Esto garantiza que 2026-09-25T22:00 aparezca ANTES que 2026-09-26T00:00
+        horariosUnicos.sort(Comparator.comparing(h -> LocalDateTime.parse(h.getFechaHoraISO())));
+
+        return horariosUnicos;
+    }
+
+    /**
+     * Convierte las horas sueltas (LocalTime) en Fechas y Horas exactas (LocalDateTime).
+     * Si detecta que una hora de fin es menor a la de inicio, automáticamente asume que es del día siguiente.
+     */
+    private List<BloqueTiempo> generarBloquesAbsolutos(LocalDate fechaReferencia, HorarioRecurso hr, boolean esDeAyer) {
+        List<BloqueTiempo> bloques = new ArrayList<>();
+
+        LocalDateTime inicioReal = fechaReferencia.atTime(hr.getHoraInicio());
+        LocalDateTime finReal = fechaReferencia.atTime(hr.getHoraFin());
+
+        // Si cierra más temprano de lo que abre, es porque cruzó la medianoche
+        if (hr.getHoraFin().isBefore(hr.getHoraInicio())) {
+            finReal = finReal.plusDays(1);
         }
 
-        return horarios;
+        // Si tiene descanso, partimos el bloque en dos
+        if (hr.getHoraInicioDescanso() != null && hr.getHoraFinDescanso() != null) {
+            LocalDateTime iDescansoReal = fechaReferencia.atTime(hr.getHoraInicioDescanso());
+            LocalDateTime fDescansoReal = fechaReferencia.atTime(hr.getHoraFinDescanso());
+
+            // Acomodamos los días del descanso si cruzaron la medianoche
+            if (hr.getHoraInicioDescanso().isBefore(hr.getHoraInicio())) iDescansoReal = iDescansoReal.plusDays(1);
+            if (hr.getHoraFinDescanso().isBefore(hr.getHoraInicio())) fDescansoReal = fDescansoReal.plusDays(1);
+
+            bloques.add(new BloqueTiempo(inicioReal, iDescansoReal, esDeAyer));
+            bloques.add(new BloqueTiempo(fDescansoReal, finReal, esDeAyer));
+        } else {
+            // Si no hay descanso, es un solo bloque de corrido
+            bloques.add(new BloqueTiempo(inicioReal, finReal, esDeAyer));
+        }
+
+        return bloques;
     }
 
     public ReporteResponseDTO generarReporteNegocio(Long negocioId, Long recursoId, LocalDateTime fechaInicio, LocalDateTime fechaFin, String emailLogueado) {
@@ -309,6 +392,28 @@ public class TurnoService {
         return reporte;
     }
 
+    public List<LocalDate> obtenerDiasLlenos(int anio, int mes, Long recursoId, Long servicioId) {
+        List<LocalDate> diasLlenos = new ArrayList<>();
+        LocalDate inicioMes = LocalDate.of(anio, mes, 1);
+        LocalDate finMes = inicioMes.withDayOfMonth(inicioMes.lengthOfMonth());
+        LocalDate hoy = LocalDate.now();
+
+        // Si el mes pedido ya pasó, todos los días están inhabilitados
+        if (finMes.isBefore(hoy)) return diasLlenos;
+
+        // Empezamos a revisar desde hoy (no tiene sentido revisar días pasados de este mes)
+        LocalDate fechaActual = inicioMes.isBefore(hoy) ? hoy : inicioMes;
+
+        while (!fechaActual.isAfter(finMes)) {
+            List<HorarioDisponibleDTO> horarios = obtenerHorariosDisponibles(fechaActual, recursoId, servicioId);
+            if (horarios.isEmpty()) {
+                diasLlenos.add(fechaActual);
+            }
+            fechaActual = fechaActual.plusDays(1);
+        }
+        return diasLlenos;
+    }
+
     private void dispararEventoTurno(Turno turno, String tipoEvento) {
         DateTimeFormatter formatter = DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm");
         String fechaFormateada = turno.getFechaHoraInicio().format(formatter);
@@ -346,41 +451,21 @@ public class TurnoService {
         if (!esElOwner && !esElRecurso) {
             throw new RuntimeException("Acceso denegado: No tenés permisos para ver esta información.");
         }
-    }
-
-    private List<Rango> calcularInterseccion(HorarioNegocio hn, HorarioRecurso hr) {
-        List<Rango> rangosNegocio = armarRangos(hn.getHoraApertura(), hn.getHoraCierre(), hn.getHoraInicioDescanso(), hn.getHoraFinDescanso());
-        List<Rango> rangosRecurso = armarRangos(hr.getHoraInicio(), hr.getHoraFin(), hr.getHoraInicioDescanso(), hr.getHoraFinDescanso());
-
-        List<Rango> interseccion = new ArrayList<>();
-
-        for (Rango rn : rangosNegocio) {
-            for (Rango rr : rangosRecurso) {
-                LocalTime maxInicio = rn.inicio.isAfter(rr.inicio) ? rn.inicio : rr.inicio;
-                LocalTime minFin = rn.fin.isBefore(rr.fin) ? rn.fin : rr.fin;
-
-                if (maxInicio.isBefore(minFin)) {
-                    interseccion.add(new Rango(maxInicio, minFin));
-                }
-            }
+        if (esElRecurso && !esElOwner && recurso.getEstadoAsociacion() != com.microservice.reservas.enums.EstadoAsociacion.ACTIVO) {
+            throw new RuntimeException("Acceso denegado: Debés aceptar la invitación en tu correo antes de poder ver la agenda.");
         }
-        return interseccion;
     }
 
-    private List<Rango> armarRangos(LocalTime inicio, LocalTime fin, LocalTime inicioDescanso, LocalTime finDescanso) {
-        List<Rango> rangos = new ArrayList<>();
-        if (inicioDescanso != null && finDescanso != null && inicioDescanso.isBefore(finDescanso)) {
-            if (inicio.isBefore(inicioDescanso)) rangos.add(new Rango(inicio, inicioDescanso));
-            if (finDescanso.isBefore(fin)) rangos.add(new Rango(finDescanso, fin));
-        } else {
-            rangos.add(new Rango(inicio, fin));
+    // Clase auxiliar para reemplazar al viejo Rango
+    private static class BloqueTiempo {
+        LocalDateTime inicio;
+        LocalDateTime fin;
+        boolean esDeAyer;
+
+        BloqueTiempo(LocalDateTime inicio, LocalDateTime fin, boolean esDeAyer) {
+            this.inicio = inicio;
+            this.fin = fin;
+            this.esDeAyer = esDeAyer;
         }
-        return rangos;
-    }
-
-    private static class Rango {
-        LocalTime inicio;
-        LocalTime fin;
-        Rango(LocalTime inicio, LocalTime fin) { this.inicio = inicio; this.fin = fin; }
     }
 }

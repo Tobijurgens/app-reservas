@@ -17,8 +17,9 @@ import org.thymeleaf.context.Context;
 @RequiredArgsConstructor
 public class EmailService {
 
-    @Value("${app.gateway.url:http://localhost:8080}")
-    private String gatewayUrl;
+    @Value("${app.frontend.url:http://localhost:5173}")
+    private String frontendUrl;
+
     private final JavaMailSender mailSender;
     private final TemplateEngine templateEngine;
 
@@ -33,7 +34,7 @@ public class EmailService {
             MimeMessage message = mailSender.createMimeMessage();
             MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
 
-            helper.setFrom(emailRemitente); // SOLUCIÓN AL ERROR
+            helper.setFrom(emailRemitente);
             helper.setTo(destinatario);
             helper.setSubject("¡Bienvenido a AgendApp! Verificá tu cuenta");
             helper.setText(htmlBody, true);
@@ -80,7 +81,7 @@ public class EmailService {
             MimeMessage message = mailSender.createMimeMessage();
             MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
 
-            helper.setFrom(emailRemitente); // SOLUCIÓN AL ERROR
+            helper.setFrom(emailRemitente);
             helper.setTo(evento.getEmailDestino());
 
             String asunto = esConfirmacion
@@ -102,7 +103,8 @@ public class EmailService {
     private Context crearContextoVerificacion(String nombre, String token) {
         Context context = new Context();
         context.setVariable("nombre", nombre);
-        context.setVariable("enlace",gatewayUrl +"/api/auth/verificar?token=" + token);
+
+        context.setVariable("enlace", frontendUrl + "/verificar?token=" + token);
         return context;
     }
 
@@ -110,8 +112,10 @@ public class EmailService {
         Context context = new Context();
         context.setVariable("nombreNegocio", nombreNegocio);
         context.setVariable("nombreRecurso", nombreRecurso);
-        context.setVariable("linkAceptar", gatewayUrl + "/api/recursos/invitacion/aceptar?token=" + token);
-        context.setVariable("linkRechazar", gatewayUrl + "/api/recursos/invitacion/rechazar?token=" + token);
+
+        // MODIFICADO: Ahora también apuntan a React (asumiendo que vas a crear estas pantallas después)
+        context.setVariable("linkAceptar", frontendUrl + "/invitacion/aceptar?token=" + token);
+        context.setVariable("linkRechazar", frontendUrl + "/invitacion/rechazar?token=" + token);
         return context;
     }
 

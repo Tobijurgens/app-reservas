@@ -19,6 +19,10 @@ public class RabbitMQConfig {
     public static final String ROUTING_KEY_INVITACION = "invitacion.email.routing.key";
     public static final String COLA_TURNO = "turno.cliente.queue";
     public static final String ROUTING_KEY_TURNO = "turno.cliente.routing.key";
+    public static final String COLA_AVISOS = "avisos.internos.queue";
+    public static final String ROUTING_KEY_AVISOS = "avisos.internos.routing.key";
+    public static final String COLA_ELIMINACION = "usuario.eliminado.queue";
+    public static final String ROUTING_KEY_ELIMINACION = "usuario.eliminado.routing.key";
 
     @Bean
     public Queue registroQueue() {
@@ -58,5 +62,25 @@ public class RabbitMQConfig {
     @Bean
     public MessageConverter jsonMessageConverter() {
         return new JacksonJsonMessageConverter();
+    }
+
+    @Bean
+    public Queue avisosQueue() {
+        return new Queue(COLA_AVISOS, true);
+    }
+
+    @Bean
+    public Binding bindingAvisos(Queue avisosQueue, DirectExchange notificacionesExchange) {
+        return BindingBuilder.bind(avisosQueue).to(notificacionesExchange).with(ROUTING_KEY_AVISOS);
+    }
+
+    @Bean
+    public Queue eliminacionQueue() {
+        return new Queue(COLA_ELIMINACION, true);
+    }
+
+    @Bean
+    public Binding bindingEliminacion(Queue eliminacionQueue, DirectExchange notificacionesExchange) {
+        return BindingBuilder.bind(eliminacionQueue).to(notificacionesExchange).with(ROUTING_KEY_ELIMINACION);
     }
 }

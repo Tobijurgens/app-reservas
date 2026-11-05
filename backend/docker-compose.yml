@@ -45,8 +45,10 @@ services:
       - "8080:8080"
     environment:
       RESERVAS_URI: http://reservas-app:8081
+      NOTIFICACIONES_URI: http://notificaciones-app:8082
     depends_on:
       - reservas-app
+      - notificaciones-app
     restart: unless-stopped
 
   reservas-app:

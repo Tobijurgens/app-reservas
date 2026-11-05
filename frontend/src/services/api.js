@@ -1,50 +1,34 @@
 import axios from 'axios';
 
-// 1. Instancia base que apunta a tu API Gateway
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8080/api';
+
 const api = axios.create({
-  baseURL: 'http://localhost:8080/api',
+  baseURL: API_URL,
   headers: {
     'Content-Type': 'application/json',
   },
 });
 
-// 2. Interceptor de Solicitud (Request)
-// Se ejecuta siempre ANTES de que la petición salga al backend
+// Interceptor de Request: Inyecta el JWT
 api.interceptors.request.use(
   (config) => {
-    // Buscamos el token en localStorage
     const token = localStorage.getItem('token');
-    
-    // Si el usuario está logueado, inyectamos el Bearer token
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
     return config;
   },
-  (error) => {
-    return Promise.reject(error);
-  }
+  (error) => Promise.reject(error)
 );
 
-// 3. Interceptor de Respuesta (Response)
-// Se ejecuta cuando Spring Boot responde, ANTES de llegar a tus componentes
+// Interceptor de Response: Manejo de errores globales (ej: 401 Unauthorized)
 api.interceptors.response.use(
-  (response) => {
-    // Todo salió bien (status 200-299)
-    return response;
-  },
+  (response) => response,
   (error) => {
-    // Manejo global de errores
-    if (error.response) {
-      // Si Spring Boot nos devuelve un 401 (Unauthorized - token vencido o inválido)
-      if (error.response.status === 401) {
-        console.warn("Sesión expirada o token faltante.");
-        localStorage.removeItem('token');
-        
-        // ¡BINGO! Eliminamos el window.location.href = '/login';
-        // Ahora Axios rechaza la promesa limpiamente y deja que el componente 
-        // (ej: ModalReserva) ataje el error y muestre el modal de login sin recargar la página.
-      }
+    if (error.response && error.response.status === 401) {
+      console.warn("Sesión expirada o token inválido.");
+      localStorage.removeItem('token');
+      // No hacemos window.location.href acá para permitir que los modales (como ModalReserva) atajen el error
     }
     return Promise.reject(error);
   }

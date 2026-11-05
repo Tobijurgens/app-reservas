@@ -75,6 +75,12 @@ public class AuthService {
     }
 
     public String login(LoginRequest request) {
+        Usuario usuarioVerificador = usuarioRepository.findByEmail(request.getEmail()).orElse(null);
+
+        if (usuarioVerificador != null && usuarioVerificador.getEstadoCuenta() == EstadoCuenta.SUSPENDIDO) {
+            throw new RuntimeException("Bad credentials");
+        }
+
         authenticationManager.authenticate(
                 new UsernamePasswordAuthenticationToken(
                         request.getEmail(),
@@ -82,10 +88,10 @@ public class AuthService {
                 )
         );
 
-        Usuario usuario = usuarioRepository.findByEmailAndEstadoCuenta(request.getEmail(), EstadoCuenta.ACTIVO)
-                .orElseThrow(() -> new RuntimeException("Usuario no encontrado o cuenta sin verificar."));
+        Usuario usuarioActivo = usuarioRepository.findByEmailAndEstadoCuenta(request.getEmail(), EstadoCuenta.ACTIVO)
+                .orElseThrow(() -> new RuntimeException("Bad credentials"));
 
-        return jwtService.generateToken(usuario);
+        return jwtService.generateToken(usuarioActivo);
     }
 
     @Transactional

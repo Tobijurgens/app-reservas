@@ -1,43 +1,32 @@
 import { useState, useEffect, useCallback } from 'react';
-import api from '../../../services/api';
+import { TurnosService } from '../../../services/TurnosService';
+import { useToast } from '../../../context/ToastContext';
 
 export const useMisReservas = () => {
   const [reservas, setReservas] = useState([]);
   const [loading, setLoading] = useState(true);
+  const { addToast } = useToast();
 
   const fetchReservas = useCallback(async () => {
     try {
       setLoading(true);
-      // Ajustá esta ruta según tu controlador de Spring Boot
-      const response = await api.get('/turnos/mis-turnos'); 
-      
-      // Ordenamos para que los turnos más próximos aparezcan primero
-      const turnosOrdenados = response.data.sort((a, b) => 
-        new Date(a.fechaHoraInicio) - new Date(b.fechaHoraInicio)
-      );
-      
-      setReservas(turnosOrdenados);
-    } catch (err) {
-      console.error('Error al traer reservas:', err);
-    } finally {
-      setLoading(false);
-    }
+      const data = await TurnosService.obtenerMisTurnos();
+      setReservas(data.sort((a, b) => new Date(a.fechaHoraInicio) - new Date(b.fechaHoraInicio)));
+    } catch (err) { console.error(err); } finally { setLoading(false); }
   }, []);
 
-  useEffect(() => {
-    fetchReservas();
-  }, [fetchReservas]);
+  useEffect(() => { fetchReservas(); }, [fetchReservas]);
 
+  // Modificado: Ahora devuelve true o false en lugar de usar window.confirm
   const cancelarReserva = async (id) => {
-    if (window.confirm('¿Estás seguro de que querés cancelar este turno? Esta acción no se puede deshacer.')) {
-      try {
-        // CORREGIDO: Usamos el método delete y la ruta exacta que espera tu controlador
-        await api.delete(`/turnos/${id}`); 
-        
-        await fetchReservas(); // Recargamos la lista para que se actualice la vista
-      } catch (err) {
-        alert(err.response?.data?.message || 'Error al cancelar la reserva.');
-      }
+    try {
+      await TurnosService.cancelarTurno(id);
+      addToast('Turno cancelado exitosamente.', 'success');
+      await fetchReservas();
+      return true;
+    } catch (err) { 
+      addToast(err.response?.data?.message || 'Error al cancelar la reserva.', 'error'); 
+      return false;
     }
   };
 

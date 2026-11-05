@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
-import api from '../../../services/api';
+import { RecursosService } from '../../../services/RecursosService';
+import { TurnosService } from '../../../services/TurnosService';
 
 export const useAgendaPersonal = () => {
   const [recursosAsignados, setRecursosAsignados] = useState([]);
@@ -8,61 +9,40 @@ export const useAgendaPersonal = () => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const fetchRecursosAsignados = async () => {
+    const fetchRecursos = async () => {
       try {
         setLoading(true);
-        const response = await api.get('/recursos/mis-asignaciones');
-        setRecursosAsignados(response.data);
-      } catch (error) {
-        console.error('Error al cargar asignaciones:', error);
-      } finally {
-        setLoading(false);
-      }
+        const data = await RecursosService.obtenerMisAsignaciones();
+        setRecursosAsignados(data);
+      } catch (error) { console.error('Error al cargar asignaciones:', error); } 
+      finally { setLoading(false); }
     };
-    fetchRecursosAsignados();
+    fetchRecursos();
   }, []);
 
   useEffect(() => {
     const fetchAgenda = async () => {
-      if (!recursoSeleccionado) {
-        setTurnos([]);
-        return;
-      }
+      if (!recursoSeleccionado) { setTurnos([]); return; }
       try {
         setLoading(true);
-        const response = await api.get(`/turnos/agenda/${recursoSeleccionado}`);
-        setTurnos(response.data);
-      } catch (error) {
-        console.error('Error al cargar agenda:', error);
-      } finally {
-        setLoading(false);
-      }
+        const data = await TurnosService.obtenerAgendaRecurso(recursoSeleccionado);
+        setTurnos(data);
+      } catch (error) { console.error('Error al cargar agenda:', error); } 
+      finally { setLoading(false); }
     };
     fetchAgenda();
   }, [recursoSeleccionado]);
 
-  // NUEVA FUNCIÓN: CANCELAR TURNO
   const cancelarTurno = async (idTurno) => {
     try {
-      await api.delete(`/turnos/${idTurno}`);
-      setTurnos(turnosAnteriores => 
-        turnosAnteriores.map(turno => 
-          turno.id === idTurno ? { ...turno, estado: 'CANCELADO' } : turno
-        )
-      );
-      return true; // Devolvemos true para que la vista sepa que salió bien
+      await TurnosService.cancelarTurno(idTurno);
+      setTurnos(prev => prev.map(t => t.id === idTurno ? { ...t, estado: 'CANCELADO' } : t));
+      return true;
     } catch (error) {
       alert(error.response?.data?.message || 'Error al cancelar el turno.');
-      return false; // Devolvemos false si falló
+      return false;
     }
   };
 
-  return {
-    recursosAsignados,
-    recursoSeleccionado,
-    setRecursoSeleccionado,
-    turnos,
-    loading,
-    cancelarTurno // Exportamos la nueva función
-  };
+  return { recursosAsignados, recursoSeleccionado, setRecursoSeleccionado, turnos, loading, cancelarTurno };
 };

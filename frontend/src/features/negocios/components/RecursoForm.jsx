@@ -1,27 +1,28 @@
 import { useState, useEffect } from 'react';
 import HorariosSemana from './HorariosSemana'; 
+import { DIAS_ES, ordenarHorariosPorDia } from '../../../utils/fechas'; 
+import { Copy } from 'lucide-react';
 
-const DIAS_ES = {
-  MONDAY: 'Lunes', TUESDAY: 'Martes', WEDNESDAY: 'Miércoles',
-  THURSDAY: 'Jueves', FRIDAY: 'Viernes', SATURDAY: 'Sábado', SUNDAY: 'Domingo'
-};
-
-const RecursoForm = ({ initialData, negocioHorarios, onSubmit, onCancel }) => {
+const RecursoForm = ({ initialData, negocioHorarios, onSubmit, onCancel, isOwner = true }) => {
   const [formData, setFormData] = useState(() => {
     if (initialData) {
       return {
-        // LA SOLUCIÓN CLAVE: Atrapamos negocioId o idNegocio
         idNegocio: initialData.negocioId || initialData.idNegocio || null, 
         nombre: initialData.nombre || '',
         descripcion: initialData.descripcion || '',
         emailUsuario: initialData.emailUsuario || '',
-        horarios: initialData.horarios || []
+        horarios: ordenarHorariosPorDia(initialData.horarios)
       };
     }
+    
+    const horariosIniciales = negocioHorarios 
+      ? ordenarHorariosPorDia(negocioHorarios).map(h => ({ ...h })) 
+      : [];
+      
     return {
       idNegocio: null,
       nombre: '', descripcion: '', emailUsuario: '',
-      horarios: negocioHorarios ? negocioHorarios.map(h => ({ ...h })) : []
+      horarios: horariosIniciales
     };
   });
 
@@ -31,7 +32,12 @@ const RecursoForm = ({ initialData, negocioHorarios, onSubmit, onCancel }) => {
     if (!negocioHorarios || negocioHorarios.length === 0) return;
 
     const errores = [];
-    const normalizarHora = (horaStr) => horaStr ? horaStr.substring(0, 5) : null;
+    
+    const parseHora = (horaStr) => {
+      if (!horaStr) return null;
+      const [horas, minutos] = horaStr.substring(0, 5).split(':');
+      return new Date(2000, 0, 1, parseInt(horas, 10), parseInt(minutos, 10));
+    };
 
     formData.horarios.forEach(hRecurso => {
       if (!hRecurso.activo) return; 
@@ -43,22 +49,30 @@ const RecursoForm = ({ initialData, negocioHorarios, onSubmit, onCancel }) => {
         return; 
       }
 
-      const recInicio = normalizarHora(hRecurso.horaInicio);
-      const negInicio = normalizarHora(hNegocio.horaInicio);
-      const recFin = normalizarHora(hRecurso.horaFin);
-      const negFin = normalizarHora(hNegocio.horaFin);
+      const recInicio = parseHora(hRecurso.horaInicio);
+      const recFin = parseHora(hRecurso.horaFin);
+      const negInicio = parseHora(hNegocio.horaInicio);
+      const negFin = parseHora(hNegocio.horaFin);
 
-      if (recInicio && negInicio && recInicio < negInicio) {
-        errores.push(`El ${DIAS_ES[hRecurso.diaSemana]} inicia antes de la apertura del local (${negInicio}).`);
-      }
-      
-      if (recFin && negFin && recFin > negFin) {
-        errores.push(`El ${DIAS_ES[hRecurso.diaSemana]} termina después del cierre del local (${negFin}).`);
+      if (recFin && recInicio && recFin < recInicio) recFin.setDate(recFin.getDate() + 1);
+      if (negFin && negInicio && negFin < negInicio) negFin.setDate(negFin.getDate() + 1);
+
+      if (recInicio && negInicio && recFin && negFin) {
+          if (recInicio < negInicio) errores.push(`El ${DIAS_ES[hRecurso.diaSemana]} inicia antes del local.`);
+          if (recFin > negFin) errores.push(`El ${DIAS_ES[hRecurso.diaSemana]} termina después del local.`);
       }
     });
 
     setErroresHorario(errores);
   }, [formData.horarios, negocioHorarios]);
+
+  const handleCopiarHorariosNegocio = () => {
+    if (!negocioHorarios) return;
+    setFormData(prev => ({
+      ...prev,
+      horarios: ordenarHorariosPorDia(negocioHorarios.map(h => ({ ...h })))
+    }));
+  };
 
   const handleHorariosChange = (nuevosHorarios) => {
     setFormData({ ...formData, horarios: nuevosHorarios });
@@ -70,7 +84,6 @@ const RecursoForm = ({ initialData, negocioHorarios, onSubmit, onCancel }) => {
 
     const payload = {
       ...formData,
-      // Si el id viene, lo enviamos; si no, dejamos que el backend falle explícitamente.
       idNegocio: formData.idNegocio,
       horarios: formData.horarios.map(h => ({
         ...h,
@@ -83,38 +96,66 @@ const RecursoForm = ({ initialData, negocioHorarios, onSubmit, onCancel }) => {
   };
 
   return (
-    <form onSubmit={handleSubmit} className="bg-white p-5 rounded-xl shadow-sm border border-blue-200 mb-6 max-w-4xl animate-fadeIn">
-      <header className="mb-4">
-        <h3 className="font-bold text-blue-800">{initialData ? 'Editar Recurso' : 'Agregar Nuevo Recurso'}</h3>
+    <form onSubmit={handleSubmit} className="bg-white p-8 rounded-2xl shadow-sm border border-gray-100 mb-8 max-w-4xl animate-fadeIn">
+      <header className="mb-6">
+        <h3 className="text-xl font-bold text-app-black">{initialData ? 'Editar Recurso' : 'Agregar Nuevo Recurso'}</h3>
         {initialData && (
-          <p className="text-xs text-yellow-800 mt-2 p-2 bg-yellow-50 rounded-md border-l-4 border-yellow-400">
-            <strong>⚠️ Buenas prácticas:</strong> Evitá cambiar el nombre por un recurso totalmente distinto para no arruinar el historial.
+          <p className="text-xs text-app-black mt-3 p-3 bg-app-yellow/50 rounded-xl">
+            <strong>⚠️ Buenas prácticas:</strong> Evitá cambiar el nombre por un recurso totalmente distinto para no arruinar el historial de turnos.
           </p>
         )}
       </header>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 mb-5">
         <div>
-          <label className="block text-xs font-bold text-gray-700 mb-1">Nombre</label>
-          <input type="text" required value={formData.nombre} onChange={e => setFormData({...formData, nombre: e.target.value})} className="w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-blue-500" placeholder="Ej: Peluquero Juan" />
+          <label className="block text-sm font-bold text-app-marineblue mb-2">Nombre</label>
+          <input 
+            type="text" 
+            required 
+            disabled={!isOwner}
+            value={formData.nombre} 
+            onChange={e => setFormData({...formData, nombre: e.target.value})} 
+            className={`w-full px-4 py-3 border-none rounded-xl focus:ring-2 focus:ring-app-marineblue transition-shadow ${!isOwner ? 'bg-gray-100 text-gray-500 cursor-not-allowed' : 'bg-gray-50 text-app-black'}`} 
+            placeholder="Ej: Peluquero Juan" 
+          />
         </div>
         <div>
-          <label className="block text-xs font-bold text-gray-700 mb-1">Email del usuario (Opcional)</label>
-          <input type="email" value={formData.emailUsuario} onChange={e => setFormData({...formData, emailUsuario: e.target.value})} className="w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-blue-500" placeholder="Si es empleado, su email" />
+          <label className="block text-sm font-bold text-app-marineblue mb-2">Email del usuario (Opcional)</label>
+          <input 
+            type="email" 
+            disabled={!isOwner}
+            value={formData.emailUsuario} 
+            onChange={e => setFormData({...formData, emailUsuario: e.target.value})} 
+            className={`w-full px-4 py-3 border-none rounded-xl focus:ring-2 focus:ring-app-marineblue transition-shadow ${!isOwner ? 'bg-gray-100 text-gray-500 cursor-not-allowed' : 'bg-gray-50 text-app-black'}`} 
+            placeholder="Si es empleado, su email" 
+          />
         </div>
       </div>
 
-      <div className="mb-4">
-        <label className="block text-xs font-bold text-gray-700 mb-1">Descripción</label>
-        <input type="text" value={formData.descripcion} onChange={e => setFormData({...formData, descripcion: e.target.value})} className="w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-blue-500" />
+      <div className="mb-8">
+        <label className="block text-sm font-bold text-app-marineblue mb-2">Descripción</label>
+        <input type="text" value={formData.descripcion} onChange={e => setFormData({...formData, descripcion: e.target.value})} className="w-full px-4 py-3 bg-gray-50 border-none rounded-xl focus:ring-2 focus:ring-app-marineblue text-app-black transition-shadow" />
+      </div>
+
+      <div className="flex justify-between items-center mb-2">
+        <h3 className="font-bold text-app-black text-sm">Configuración de Horarios</h3>
+        {isOwner && (
+          <button 
+            type="button" 
+            onClick={handleCopiarHorariosNegocio}
+            className="text-xs font-bold text-app-marineblue bg-app-ligthblue/30 px-3 py-1.5 rounded-lg hover:bg-app-ligthblue/60 transition-colors flex items-center gap-1"
+          >
+            <Copy className="w-3 h-3" /> Copiar horarios del negocio
+          </button>
+        )}
       </div>
 
       <HorariosSemana horarios={formData.horarios} setHorarios={handleHorariosChange} />
       
       {erroresHorario.length > 0 && (
-        <div className="mt-4 p-3 bg-red-50 rounded-lg border border-red-200 animate-fadeIn">
-          <p className="text-sm font-bold text-red-800 mb-1">Corregí los siguientes conflictos de horario:</p>
-          <ul className="list-disc list-inside text-xs text-red-600">
+        <div className="mt-6 p-4 bg-app-ligthblue/30 rounded-xl border border-app-ligthblue animate-fadeIn">
+          <p className="text-sm font-bold text-app-black mb-2">Corregí los siguientes conflictos de horario:</p>
+          <ul className="list-disc list-inside text-sm text-app-black/80 space-y-1">
             {erroresHorario.map((err, idx) => (
               <li key={idx}>{err}</li>
             ))}
@@ -122,15 +163,15 @@ const RecursoForm = ({ initialData, negocioHorarios, onSubmit, onCancel }) => {
         </div>
       )}
 
-      <footer className="flex justify-end gap-3 mt-4">
-        <button type="button" onClick={onCancel} className="text-gray-500 text-sm font-medium hover:text-gray-700">Cancelar</button>
+      <footer className="flex justify-end gap-4 mt-8 border-t border-gray-100 pt-6">
+        <button type="button" onClick={onCancel} className="text-app-marineblue text-sm font-bold uppercase tracking-wider hover:text-app-black transition-colors">Cancelar</button>
         <button 
           type="submit" 
           disabled={erroresHorario.length > 0}
-          className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+          className={`px-8 py-3 rounded-xl text-sm font-bold transition-all shadow-sm ${
             erroresHorario.length > 0 
-              ? 'bg-gray-300 text-gray-500 cursor-not-allowed' 
-              : 'bg-blue-600 text-white hover:bg-blue-700'
+              ? 'bg-gray-200 text-gray-400 cursor-not-allowed' 
+              : 'bg-app-marineblue text-white hover:bg-app-black/90'
           }`}
         >
           {initialData ? 'Actualizar' : 'Guardar'}
