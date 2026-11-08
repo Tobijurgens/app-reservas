@@ -3,6 +3,8 @@ import { useSearchParams, useNavigate } from 'react-router-dom';
 import { AuthService } from '../../../services/AuthService';
 import { useToast } from '../../../context/ToastContext';
 
+import { mensajeError } from '../../../utils/errores';
+
 const VerificarCuenta = () => {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
@@ -29,7 +31,7 @@ const VerificarCuenta = () => {
         addToast('¡Cuenta verificada con éxito! Ya podés iniciar sesión.', 'success');
       } catch (error) {
         addToast(
-          error.response?.data || 'Error al verificar la cuenta. Es posible que el enlace haya expirado.', 
+          mensajeError(error, 'Error al verificar la cuenta. Es posible que el enlace haya expirado.'),
           'error'
         );
       } finally {

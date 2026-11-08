@@ -18,7 +18,6 @@ import org.springframework.web.bind.annotation.*;
 import java.security.Principal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.time.LocalTime;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -93,7 +92,7 @@ public class TurnoController {
             Principal principal) {
 
         LocalDateTime inicioDia = fecha.atStartOfDay();
-        LocalDateTime finDia = fecha.atTime(LocalTime.MAX);
+        LocalDateTime finDia = fecha.plusDays(1).atStartOfDay();
 
         List<TurnoResponseDTO> lista = turnoService.obtenerTurnosOcupados(recursoId, inicioDia, finDia, principal.getName()).stream()
                 .map(TurnoResponseDTO::new)

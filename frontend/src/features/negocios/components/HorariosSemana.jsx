@@ -1,33 +1,15 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { ChevronDown } from 'lucide-react';
 
-const DIAS = ['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY', 'SUNDAY'];
-const DIAS_ES = {
-  MONDAY: 'Lunes', TUESDAY: 'Martes', WEDNESDAY: 'Miércoles',
-  THURSDAY: 'Jueves', FRIDAY: 'Viernes', SATURDAY: 'Sábado', SUNDAY: 'Domingo'
-};
+import { DIAS_ES } from '../../../utils/fechas';
 
 const HorariosSemana = ({ horarios, setHorarios }) => {
   const [isExpanded, setIsExpanded] = useState(false);
 
-  useEffect(() => {
-    if (!horarios || horarios.length === 0) {
-      const defaultHorarios = DIAS.map(dia => ({
-        diaSemana: dia,
-        activo: !['SATURDAY', 'SUNDAY'].includes(dia),
-        horaInicio: '09:00',
-        horaFin: '18:00',
-        horaInicioDescanso: '',
-        horaFinDescanso: ''
-      }));
-      setHorarios(defaultHorarios);
-    }
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
-
   const handleChange = (index, campo, valor) => {
-    const nuevosHorarios = [...horarios];
-    nuevosHorarios[index][campo] = valor;
-    setHorarios(nuevosHorarios);
+    setHorarios(horarios.map((horario, posicion) => (
+      posicion === index ? { ...horario, [campo]: valor } : horario
+    )));
   };
 
   const copiarEnTodos = (indexOrigen) => {

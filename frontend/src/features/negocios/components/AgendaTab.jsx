@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useAgendaRecurso } from '../hooks/useAgendaRecurso';
 import { esFuturo, esPasado, esHoy, ordenarPorFechaAsc, ordenarPorFechaDesc } from '../../../utils/fechas';
 import TurnoCard from './TurnoCard';
@@ -7,15 +7,10 @@ import ModalConfirmacion from '../../../components/ModalConfirmacion';
 import { CalendarDays, UserGroup, User } from 'lucide-react';
 
 const AgendaTab = ({ recursos }) => {
-  const [recursoSeleccionadoId, setRecursoSeleccionadoId] = useState('');
-  
-  useEffect(() => {
-    if (recursos.length === 1 && !recursoSeleccionadoId) {
-      setRecursoSeleccionadoId(recursos[0].id);
-    }
-  }, [recursos, recursoSeleccionadoId]);
-
-  const { turnos, loading, cancelarTurno } = useAgendaRecurso(recursoSeleccionadoId);
+  const [seleccion, setRecursoSeleccionadoId] = useState('');
+  const recursoSeleccionadoId = recursos.some(recurso => recurso.id === seleccion)
+    ? seleccion : recursos.length === 1 ? recursos[0].id : '';
+  const { turnos, loading, error, reintentar, cancelarTurno } = useAgendaRecurso(recursoSeleccionadoId);
 
   const [vistaActual, setVistaActual] = useState('proximos');
   const [filtroProximos, setFiltroProximos] = useState('todos');
@@ -71,7 +66,12 @@ const AgendaTab = ({ recursos }) => {
         ) : null}
       </header>
 
-      {!recursoSeleccionadoId ? (
+      {error ? (
+        <div role="alert" className="py-12 text-center text-sm">
+          <p>{error}</p>
+          <button onClick={reintentar} className="mt-4 font-semibold text-app-marineblue hover:underline">Reintentar</button>
+        </div>
+      ) : !recursoSeleccionadoId ? (
         <div className="text-center py-16 bg-app-white rounded-2xl border border-dashed border-gray-200">
           <span className="text-4xl block mb-3"><CalendarDays className="h-12 w-12 mx-auto" /></span>
           <p className="text-app-marineblue font-medium text-lg">Seleccioná un recurso arriba</p>

@@ -4,11 +4,13 @@ import com.microservice.reservas.dto.request.HorarioSemanalDTO;
 import com.microservice.reservas.dto.request.NegocioDTO;
 import com.microservice.reservas.entity.*;
 import com.microservice.reservas.enums.EstadoCuenta;
+import com.microservice.reservas.enums.EstadoAsociacion;
 import com.microservice.reservas.enums.EstadoTurno;
 import com.microservice.reservas.repository.*;
 import com.microservice.reservas.util.ValidacionUtil;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
@@ -81,8 +83,15 @@ public class NegocioService {
         return negocioRepository.findByActivoTrue();
     }
 
-    public Optional<Negocio> obtenerPorId(Long id) {
-        return negocioRepository.findByIdAndActivoTrue(id);
+    public Optional<Negocio> obtenerPorId(Long id, String emailLogueado) {
+        return negocioRepository.findByIdAndActivoTrue(id).map(negocio -> {
+            if (!negocio.getOwner().getEmail().equals(emailLogueado)
+                    && !recursoRepository.existsByNegocioIdAndUsuarioEmailAndEstadoAsociacionAndActivoTrue(
+                            id, emailLogueado, EstadoAsociacion.ACTIVO)) {
+                throw new AccessDeniedException("Acceso denegado: No tenés acceso administrativo a este negocio.");
+            }
+            return negocio;
+        });
     }
 
     public Optional<Negocio> obtenerPorAlias(String alias) {

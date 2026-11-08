@@ -1,4 +1,4 @@
-import { useState, useEffect, useContext } from 'react';
+import { useState, useContext } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useGestionNegocio } from '../hooks/useGestionNegocio';
 import { AuthContext } from '../../../context/AuthContext'; 
@@ -10,6 +10,7 @@ import AgendaTab from '../components/AgendaTab';
 import HistorialTab from '../components/HistorialTab';
 import ReportesTab from '../components/ReportesTab';
 import ModalConfirmacion from '../../../components/ModalConfirmacion';
+import EstadoInvitacion from '../components/EstadoInvitacion';
 import NegocioForm from '../components/NegocioForm';
 import { DIAS_ES, ordenarHorariosPorDia } from '../../../utils/fechas'; 
 import { Settings, CalendarDays, RotateCcwClock, ChartPie, ChevronDown, UserRoundPlus, ExternalLink, Copy, Edit} from 'lucide-react';
@@ -24,6 +25,8 @@ const GestionNegocio = () => {
     negocio, 
     recursosTotales, 
     recursosActivos, 
+    miAsignacion,
+    puedeAdministrar,
     loading, 
     guardarRecurso, 
     eliminarRecurso, 
@@ -32,15 +35,14 @@ const GestionNegocio = () => {
   } = useGestionNegocio(id);
 
   const emailLogueado = user?.email;
-  const isOwner = negocio && (emailLogueado === negocio?.emailOwner); 
+  const isOwner = negocio?.propietario === true;
   
-  let miRecursoId = null;
-  if (!isOwner && recursosTotales.length > 0 && emailLogueado) {
-      const miRecurso = recursosTotales.find(r => r.emailUsuario === emailLogueado);
-      if (miRecurso) miRecursoId = miRecurso.id;
-  }
+  const miRecursoId = miAsignacion?.id ?? null;
 
-  const [pestañaActiva, setPestañaActiva] = useState(''); 
+  const [seleccion, setSeleccion] = useState(null);
+  const pestañaActiva = seleccion?.id === id && seleccion.email === emailLogueado
+    ? seleccion.pestaña : isOwner ? 'configuracion' : 'agenda';
+  const setPestañaActiva = pestaña => setSeleccion({ id, email: emailLogueado, pestaña });
   const [isFormRecursoOpen, setIsFormRecursoOpen] = useState(false);
   const [isFormNegocioOpen, setIsFormNegocioOpen] = useState(false);
   const [editingRecurso, setEditingRecurso] = useState(null);
@@ -50,13 +52,6 @@ const GestionNegocio = () => {
   const [recursoAEliminar, setRecursoAEliminar] = useState(null);
   const [servicioAEliminar, setServicioAEliminar] = useState(null);
   const [isProcessing, setIsProcessing] = useState(false);
-
-  useEffect(() => {
-    if (!loading && negocio) {
-      const esDueño = emailLogueado === negocio?.emailOwner;
-      setPestañaActiva(esDueño ? 'configuracion' : 'agenda');
-    }
-  }, [loading, negocio, emailLogueado]);
 
   const handleCopiarLink = () => {
     const link = `${window.location.origin}/negocio/${negocio.alias}`;
@@ -69,7 +64,7 @@ const GestionNegocio = () => {
     if (res.success) {
       setIsFormRecursoOpen(false);
       if (!editingRecurso && formData.emailUsuario) {
-        addToast('Recurso creado. El usuario debe verificar su correo para aceptar la invitación.', 'warning');
+        addToast('Recurso creado. El usuario debe verificar su correo para aceptar la invitación.', 'success');
       } else {
         addToast('Recurso guardado correctamente.', 'success');
       }
@@ -112,14 +107,28 @@ const GestionNegocio = () => {
     } else addToast(res.message, 'error');
   };
 
-  if (loading || !pestañaActiva) {
+  if (loading) {
       return <div className="p-8 text-center flex justify-center"><div className="animate-spin rounded-full h-10 w-10 border-b-2 border-app-marineblue"></div></div>;
+  }
+
+  if (!negocio || !puedeAdministrar) {
+    return (
+      <div className="mx-auto max-w-xl px-4 py-12">
+        <div className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
+          <h1 className="text-xl font-bold text-app-black">Acceso al negocio</h1>
+          {miAsignacion ? <EstadoInvitacion estado={miAsignacion.estadoAsociacion} />
+            : <p className="mt-4 text-sm text-gray-500">No se pudo comprobar el acceso a este negocio.</p>}
+          <Link to="/dashboard" state={{ tab: 'trabajos' }} className="mt-6 inline-block font-semibold text-app-marineblue hover:text-app-black">Volver a Mis Trabajos</Link>
+        </div>
+      </div>
+    );
   }
 
   if (isFormNegocioOpen) {
     return (
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 animate-fadeIn">
         <NegocioForm 
+          key={negocio.id}
           initialData={negocio} 
           onSubmit={handleActualizarNegocio} 
           onCancel={() => setIsFormNegocioOpen(false)} 
@@ -242,6 +251,7 @@ const GestionNegocio = () => {
 
               {isFormRecursoOpen && (
                 <RecursoForm 
+                  key={editingRecurso?.id ?? 'nuevo'}
                   initialData={editingRecurso} 
                   negocioHorarios={negocio?.horarios}
                   isOwner={isOwner}

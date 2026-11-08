@@ -17,11 +17,11 @@ public class NegocioResponseDTO {
     private String telefono;
     private String emailContacto;
     private String descripcion;
-    private String emailOwner;
+    private boolean propietario;
 
     private List<HorarioSemanalDTO> horarios = new ArrayList<>();
 
-    public NegocioResponseDTO(Negocio negocio) {
+    public NegocioResponseDTO(Negocio negocio, String emailLogueado) {
         this.id = negocio.getId();
         this.nombre = negocio.getNombre();
         this.alias = negocio.getAlias();
@@ -31,7 +31,7 @@ public class NegocioResponseDTO {
         this.descripcion = negocio.getDescripcion();
 
         if (negocio.getOwner() != null) {
-            this.emailOwner = negocio.getOwner().getEmail();
+            this.propietario = negocio.getOwner().getEmail().equals(emailLogueado);
         }
 
         if (negocio.getHorarios() != null) {

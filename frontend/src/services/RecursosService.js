@@ -42,18 +42,26 @@ export const RecursosService = {
     return response.data;
   },
 
+  obtenerInvitacion: async (token) => {
+    const response = await api.get('/recursos/invitacion', { params: { token } });
+    return response.data;
+  },
+
   aceptarInvitacion: async (token) => {
-    const response = await api.get('/recursos/invitacion/aceptar', { params: { token } });
+    const response = await api.post('/recursos/invitacion/aceptar', { token });
     return response.data;
   },
 
   rechazarInvitacion: async (token) => {
-    const response = await api.get('/recursos/invitacion/rechazar', { params: { token } });
+    const response = await api.post('/recursos/invitacion/rechazar', { token });
     return response.data;
   },
 
   procesarInvitacion: async (accion, token) => {
-    const response = await api.get(`/recursos/invitacion/${accion}`, { params: { token } });
+    if (accion !== 'aceptar' && accion !== 'rechazar') {
+      throw new Error('La decisión de la invitación no es válida.');
+    }
+    const response = await api.post(`/recursos/invitacion/${accion}`, { token });
     return response.data;
   }
 };

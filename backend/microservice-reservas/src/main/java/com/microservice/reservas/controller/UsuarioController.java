@@ -19,6 +19,11 @@ public class UsuarioController {
 
     private final UsuarioService usuarioService;
 
+    @GetMapping("/perfil")
+    public ResponseEntity<UsuarioResponseDTO> obtenerMiPerfil(Principal principal) {
+        return ResponseEntity.ok(new UsuarioResponseDTO(usuarioService.obtenerMiPerfil(principal.getName())));
+    }
+
     @PutMapping("/perfil")
     public ResponseEntity<UsuarioResponseDTO> actualizarPerfil(@Valid @RequestBody ActualizarPerfilRequest request, Principal principal) {
         String emailLogueado = principal.getName();
@@ -34,17 +39,13 @@ public class UsuarioController {
     }
 
     @GetMapping("/{id}")
-    public ResponseEntity<UsuarioResponseDTO> obtenerPorId(@PathVariable Long id) {
-        return usuarioService.obtenerPorId(id)
-                .map(usuario -> ResponseEntity.ok(new UsuarioResponseDTO(usuario)))
-                .orElseThrow(() -> new RuntimeException("Usuario no encontrado o inactivo."));
+    public ResponseEntity<UsuarioResponseDTO> obtenerPorId(@PathVariable Long id, Principal principal) {
+        return ResponseEntity.ok(new UsuarioResponseDTO(usuarioService.obtenerPorId(id, principal.getName())));
     }
 
     @GetMapping("/email/{email}")
-    public ResponseEntity<UsuarioResponseDTO> obtenerPorEmail(@PathVariable String email) {
-        return usuarioService.obtenerPorEmail(email)
-                .map(usuario -> ResponseEntity.ok(new UsuarioResponseDTO(usuario)))
-                .orElseThrow(() -> new RuntimeException("Usuario no encontrado o inactivo."));
+    public ResponseEntity<UsuarioResponseDTO> obtenerPorEmail(@PathVariable String email, Principal principal) {
+        return ResponseEntity.ok(new UsuarioResponseDTO(usuarioService.obtenerPorEmail(email, principal.getName())));
     }
 
 

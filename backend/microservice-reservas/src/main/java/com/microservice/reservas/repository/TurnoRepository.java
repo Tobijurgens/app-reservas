@@ -3,6 +3,8 @@ package com.microservice.reservas.repository;
 import com.microservice.reservas.enums.EstadoTurno;
 import com.microservice.reservas.entity.Turno;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
+import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -12,27 +14,32 @@ import org.springframework.data.domain.Pageable;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Optional;
 
 @Repository
 public interface TurnoRepository extends JpaRepository<Turno,Long>{
 
     @Query("SELECT COUNT(t) > 0 FROM Turno t WHERE t.recurso.id = :recursoId " +
             "AND t.fechaHoraInicio < :fechaFin AND t.fechaHoraFin > :fechaInicio " +
-            "AND t.estado != :estadoIgnorado")
+            "AND t.estado = :estado")
     boolean existeSolapamiento(
             @Param("recursoId") Long recursoId,
             @Param("fechaInicio") LocalDateTime fechaInicio,
             @Param("fechaFin") LocalDateTime fechaFin,
-            @Param("estadoIgnorado") EstadoTurno estadoIgnorado);
+            @Param("estado") EstadoTurno estado);
 
     @Query("SELECT t FROM Turno t WHERE t.recurso.id = :recursoId " +
-            "AND t.fechaHoraInicio BETWEEN :inicio AND :fin " +
-            "AND t.estado != :estadoIgnorado")
+            "AND t.fechaHoraInicio < :fin AND t.fechaHoraFin > :inicio " +
+            "AND t.estado = :estado ORDER BY t.fechaHoraInicio")
     List<Turno> findTurnosOcupados(
             @Param("recursoId") Long recursoId,
             @Param("inicio") LocalDateTime inicio,
             @Param("fin") LocalDateTime fin,
-            @Param("estadoIgnorado") EstadoTurno estadoIgnorado);
+            @Param("estado") EstadoTurno estado);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT t FROM Turno t WHERE t.id = :id")
+    Optional<Turno> findByIdParaActualizar(@Param("id") Long id);
 
     List<Turno> findByClienteId(Long clienteId);
     List<Turno> findByRecursoIdAndEstadoIn(Long recursoId, List<EstadoTurno> estados);

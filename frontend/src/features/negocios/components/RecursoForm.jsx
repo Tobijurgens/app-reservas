@@ -1,6 +1,9 @@
-import { useState, useEffect } from 'react';
+import { useState, useRef } from 'react';
 import HorariosSemana from './HorariosSemana'; 
-import { DIAS_ES, ordenarHorariosPorDia } from '../../../utils/fechas'; 
+import { horariosIniciales, ordenarHorariosPorDia } from '../../../utils/fechas';
+import { validarHorariosRecurso } from '../utils/horarios';
+import { useToast } from '../../../context/ToastContext';
+import { mensajeError } from '../../../utils/errores';
 import { Copy } from 'lucide-react';
 
 const RecursoForm = ({ initialData, negocioHorarios, onSubmit, onCancel, isOwner = true }) => {
@@ -11,60 +14,20 @@ const RecursoForm = ({ initialData, negocioHorarios, onSubmit, onCancel, isOwner
         nombre: initialData.nombre || '',
         descripcion: initialData.descripcion || '',
         emailUsuario: initialData.emailUsuario || '',
-        horarios: ordenarHorariosPorDia(initialData.horarios)
+        horarios: horariosIniciales(initialData.horarios)
       };
     }
     
-    const horariosIniciales = negocioHorarios 
-      ? ordenarHorariosPorDia(negocioHorarios).map(h => ({ ...h })) 
-      : [];
-      
     return {
       idNegocio: null,
       nombre: '', descripcion: '', emailUsuario: '',
-      horarios: horariosIniciales
+      horarios: horariosIniciales(negocioHorarios),
     };
   });
-
-  const [erroresHorario, setErroresHorario] = useState([]);
-
-  useEffect(() => {
-    if (!negocioHorarios || negocioHorarios.length === 0) return;
-
-    const errores = [];
-    
-    const parseHora = (horaStr) => {
-      if (!horaStr) return null;
-      const [horas, minutos] = horaStr.substring(0, 5).split(':');
-      return new Date(2000, 0, 1, parseInt(horas, 10), parseInt(minutos, 10));
-    };
-
-    formData.horarios.forEach(hRecurso => {
-      if (!hRecurso.activo) return; 
-
-      const hNegocio = negocioHorarios.find(hn => hn.diaSemana === hRecurso.diaSemana);
-      
-      if (!hNegocio || !hNegocio.activo) {
-        errores.push(`El local está cerrado los ${DIAS_ES[hRecurso.diaSemana]}.`);
-        return; 
-      }
-
-      const recInicio = parseHora(hRecurso.horaInicio);
-      const recFin = parseHora(hRecurso.horaFin);
-      const negInicio = parseHora(hNegocio.horaInicio);
-      const negFin = parseHora(hNegocio.horaFin);
-
-      if (recFin && recInicio && recFin < recInicio) recFin.setDate(recFin.getDate() + 1);
-      if (negFin && negInicio && negFin < negInicio) negFin.setDate(negFin.getDate() + 1);
-
-      if (recInicio && negInicio && recFin && negFin) {
-          if (recInicio < negInicio) errores.push(`El ${DIAS_ES[hRecurso.diaSemana]} inicia antes del local.`);
-          if (recFin > negFin) errores.push(`El ${DIAS_ES[hRecurso.diaSemana]} termina después del local.`);
-      }
-    });
-
-    setErroresHorario(errores);
-  }, [formData.horarios, negocioHorarios]);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const enviando = useRef(false);
+  const { addToast } = useToast();
+  const erroresHorario = validarHorariosRecurso(formData.horarios, negocioHorarios);
 
   const handleCopiarHorariosNegocio = () => {
     if (!negocioHorarios) return;
@@ -78,9 +41,11 @@ const RecursoForm = ({ initialData, negocioHorarios, onSubmit, onCancel, isOwner
     setFormData({ ...formData, horarios: nuevosHorarios });
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    if (erroresHorario.length > 0) return;
+    if (enviando.current || erroresHorario.length > 0) return;
+    enviando.current = true;
+    setIsSubmitting(true);
 
     const payload = {
       ...formData,
@@ -92,7 +57,14 @@ const RecursoForm = ({ initialData, negocioHorarios, onSubmit, onCancel, isOwner
       }))
     };
     
-    onSubmit(payload);
+    try {
+      await onSubmit(payload);
+    } catch (error) {
+      addToast(mensajeError(error, 'Error al guardar el recurso.'), 'error');
+    } finally {
+      enviando.current = false;
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -164,17 +136,17 @@ const RecursoForm = ({ initialData, negocioHorarios, onSubmit, onCancel, isOwner
       )}
 
       <footer className="flex justify-end gap-4 mt-8 border-t border-gray-100 pt-6">
-        <button type="button" onClick={onCancel} className="text-app-marineblue text-sm font-bold uppercase tracking-wider hover:text-app-black transition-colors">Cancelar</button>
+        <button type="button" disabled={isSubmitting} onClick={onCancel} className="text-app-marineblue text-sm font-bold uppercase tracking-wider hover:text-app-black transition-colors">Cancelar</button>
         <button 
           type="submit" 
-          disabled={erroresHorario.length > 0}
+          disabled={isSubmitting || erroresHorario.length > 0}
           className={`px-8 py-3 rounded-xl text-sm font-bold transition-all shadow-sm ${
             erroresHorario.length > 0 
               ? 'bg-gray-200 text-gray-400 cursor-not-allowed' 
               : 'bg-app-marineblue text-white hover:bg-app-black/90'
           }`}
         >
-          {initialData ? 'Actualizar' : 'Guardar'}
+          {isSubmitting ? 'Guardando...' : initialData ? 'Actualizar' : 'Guardar'}
         </button>
       </footer>
     </form>

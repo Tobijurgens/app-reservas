@@ -2,6 +2,7 @@ package com.microservice.reservas.controller;
 
 import com.microservice.reservas.dto.request.NegocioDTO;
 import com.microservice.reservas.dto.response.NegocioResponseDTO;
+import com.microservice.reservas.dto.response.NegocioPublicoDTO;
 import com.microservice.reservas.service.NegocioService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -23,7 +24,7 @@ public class NegocioController {
     public ResponseEntity<NegocioResponseDTO> crearNegocio(@Valid @RequestBody NegocioDTO negocioDto, Principal principal) {
         String emailOwner = principal.getName();
         var nuevoNegocio = negocioService.crearNegocio(negocioDto, emailOwner);
-        return ResponseEntity.ok(new NegocioResponseDTO(nuevoNegocio));
+        return ResponseEntity.ok(new NegocioResponseDTO(nuevoNegocio, emailOwner));
     }
 
     @PutMapping("/{id}")
@@ -32,13 +33,13 @@ public class NegocioController {
             @Valid @RequestBody NegocioDTO negocioDto,
             Principal principal) {
         String emailLogueado = principal.getName();
-        return ResponseEntity.ok(new NegocioResponseDTO(negocioService.actualizarNegocio(id, negocioDto, emailLogueado)));
+        return ResponseEntity.ok(new NegocioResponseDTO(negocioService.actualizarNegocio(id, negocioDto, emailLogueado), emailLogueado));
     }
 
     @GetMapping
-    public ResponseEntity<List<NegocioResponseDTO>> obtenerTodos() {
-        List<NegocioResponseDTO> lista = negocioService.obtenerTodos().stream()
-                .map(NegocioResponseDTO::new)
+    public ResponseEntity<List<NegocioPublicoDTO>> obtenerTodos() {
+        List<NegocioPublicoDTO> lista = negocioService.obtenerTodos().stream()
+                .map(NegocioPublicoDTO::new)
                 .collect(Collectors.toList());
         return ResponseEntity.ok(lista);
     }
@@ -47,23 +48,23 @@ public class NegocioController {
     public ResponseEntity<List<NegocioResponseDTO>> obtenerMisNegocios(Principal principal) {
         String emailLogueado = principal.getName();
         List<NegocioResponseDTO> misNegocios = negocioService.obtenerMisNegocios(emailLogueado).stream()
-                .map(NegocioResponseDTO::new)
+                .map(negocio -> new NegocioResponseDTO(negocio, emailLogueado))
                 .collect(Collectors.toList());
 
         return ResponseEntity.ok(misNegocios);
     }
 
     @GetMapping("/{id}")
-    public ResponseEntity<NegocioResponseDTO> obtenerPorId(@PathVariable Long id) {
-        return negocioService.obtenerPorId(id)
-                .map(negocio -> ResponseEntity.ok(new NegocioResponseDTO(negocio)))
+    public ResponseEntity<NegocioResponseDTO> obtenerPorId(@PathVariable Long id, Principal principal) {
+        return negocioService.obtenerPorId(id, principal.getName())
+                .map(negocio -> ResponseEntity.ok(new NegocioResponseDTO(negocio, principal.getName())))
                 .orElseThrow(() -> new RuntimeException("Negocio no encontrado o inactivo."));
     }
 
     @GetMapping("/publico/{alias}")
-    public ResponseEntity<NegocioResponseDTO> obtenerPorAlias(@PathVariable String alias) {
+    public ResponseEntity<NegocioPublicoDTO> obtenerPorAlias(@PathVariable String alias) {
         return negocioService.obtenerPorAlias(alias)
-                .map(negocio -> ResponseEntity.ok(new NegocioResponseDTO(negocio)))
+                .map(negocio -> ResponseEntity.ok(new NegocioPublicoDTO(negocio)))
                 .orElseThrow(() -> new RuntimeException("El negocio no existe o no se encuentra disponible."));
     }
 

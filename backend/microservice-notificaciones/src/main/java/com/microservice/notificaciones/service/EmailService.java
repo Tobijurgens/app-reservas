@@ -4,7 +4,7 @@ import com.microservice.notificaciones.dto.TurnoEvent;
 import jakarta.mail.MessagingException;
 import jakarta.mail.internet.MimeMessage;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
+import org.springframework.mail.MailPreparationException;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.mail.javamail.MimeMessageHelper;
@@ -12,7 +12,6 @@ import org.springframework.stereotype.Service;
 import org.thymeleaf.TemplateEngine;
 import org.thymeleaf.context.Context;
 
-@Slf4j
 @Service
 @RequiredArgsConstructor
 public class EmailService {
@@ -40,11 +39,9 @@ public class EmailService {
             helper.setText(htmlBody, true);
 
             mailSender.send(message);
-            log.info("📧 Correo de verificación enviado exitosamente a: {}", destinatario);
 
         } catch (MessagingException e) {
-            log.error("❌ Error al enviar el correo a {}: {}", destinatario, e.getMessage());
-            throw new RuntimeException("Error enviando correo", e);
+            throw new MailPreparationException("No se pudo preparar el correo.", e);
         }
     }
 
@@ -62,11 +59,9 @@ public class EmailService {
             helper.setText(htmlCuerpo, true);
 
             mailSender.send(mensaje);
-            log.info("📧 Correo de invitación enviado exitosamente a: {}", destino);
 
         } catch (MessagingException e) {
-            log.error("❌ Error al enviar el correo de invitación a {}: {}", destino, e.getMessage());
-            throw new RuntimeException("Error enviando correo de invitación", e);
+            throw new MailPreparationException("No se pudo preparar el correo.", e);
         }
     }
 
@@ -92,11 +87,9 @@ public class EmailService {
             helper.setText(htmlBody, true);
 
             mailSender.send(message);
-            log.info("📧 Correo de turno ({}) enviado exitosamente a: {}", evento.getTipoEvento(), evento.getEmailDestino());
 
         } catch (MessagingException e) {
-            log.error("❌ Error al enviar el correo de turno a {}: {}", evento.getEmailDestino(), e.getMessage());
-            throw new RuntimeException("Error enviando correo de turno", e);
+            throw new MailPreparationException("No se pudo preparar el correo.", e);
         }
     }
 
@@ -113,9 +106,7 @@ public class EmailService {
         context.setVariable("nombreNegocio", nombreNegocio);
         context.setVariable("nombreRecurso", nombreRecurso);
 
-        // MODIFICADO: Ahora también apuntan a React (asumiendo que vas a crear estas pantallas después)
-        context.setVariable("linkAceptar", frontendUrl + "/invitacion/aceptar?token=" + token);
-        context.setVariable("linkRechazar", frontendUrl + "/invitacion/rechazar?token=" + token);
+        context.setVariable("linkConfirmar", frontendUrl + "/invitacion/confirmar?token=" + token);
         return context;
     }
 

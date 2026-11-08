@@ -1,11 +1,19 @@
 import { Link } from 'react-router-dom';
 import { useMisAsignaciones } from '../hooks/useMisAsignaciones';
-import { Settings, BriefcaseBusiness, SquarePen, Store, CalendarDays, LogOut, Bell} from 'lucide-react';
+import EstadoInvitacion from './EstadoInvitacion';
+import { BriefcaseBusiness, Store } from 'lucide-react';
 
 const MisTrabajosList = () => {
-  const { asignaciones, loading } = useMisAsignaciones();
+  const { asignaciones, loading, error, reintentar } = useMisAsignaciones();
 
   if (loading) return <div className="py-12 flex justify-center"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-app-marineblue"></div></div>;
+
+  if (error) return (
+    <div role="alert" className="rounded-xl border border-gray-200 bg-white p-6 text-center text-sm text-app-black">
+      <p>{error}</p>
+      <button onClick={reintentar} className="mt-4 font-semibold text-app-marineblue hover:underline">Reintentar</button>
+    </div>
+  );
 
   if (asignaciones.length === 0) {
     return (
@@ -30,12 +38,12 @@ const MisTrabajosList = () => {
               </div>
             </div>
           </div>
-          <Link 
+          {asignacion.estadoAsociacion === 'ACTIVO' && asignacion.activo === true ? <Link
             to={`/dashboard/mi-trabajo/${asignacion.id}`}
             className="block w-full text-center bg-app-marineblue text-white hover:bg-app-black/90 font-semibold py-3 rounded-xl transition-colors mt-6 shadow-sm duration-300"
           >
-            Ingresar a mi espacio
-          </Link>
+            Administrar
+          </Link> : <EstadoInvitacion estado={asignacion.estadoAsociacion} />}
         </div>
       ))}
     </div>

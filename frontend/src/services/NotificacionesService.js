@@ -1,31 +1,23 @@
 import api from './api';
 
 export const NotificacionesService = {
-  obtenerMisNotificaciones: async (email) => {
-    const response = await api.get('/notificaciones', {
-      headers: { 'X-User-Email': email }
-    });
+  obtenerMisNotificaciones: async () => {
+    const response = await api.get('/notificaciones');
     return response.data;
   },
 
-  contarNoLeidas: async (email) => {
-    const response = await api.get('/notificaciones/no-leidas/count', {
-      headers: { 'X-User-Email': email }
-    });
+  contarNoLeidas: async () => {
+    const response = await api.get('/notificaciones/no-leidas/count');
     return response.data;
   },
 
-  marcarComoLeida: async (id, email) => {
-    const response = await api.put(`/notificaciones/${id}/leer`, null, {
-      headers: { 'X-User-Email': email }
-    });
+  marcarComoLeida: async (id) => {
+    const response = await api.put(`/notificaciones/${id}/leer`, null);
     return response.data;
   },
 
-  marcarTodasComoLeidas: async (email) => {
-    const response = await api.put('/notificaciones/leer-todas', null, {
-      headers: { 'X-User-Email': email }
-    });
+  marcarTodasComoLeidas: async () => {
+    const response = await api.put('/notificaciones/leer-todas', null);
     return response.data;
   }
 };

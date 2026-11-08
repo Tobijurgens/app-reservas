@@ -4,6 +4,7 @@ import com.microservice.reservas.dto.request.ServicioDTO;
 import com.microservice.reservas.entity.*;
 import com.microservice.reservas.enums.EstadoTurno;
 import com.microservice.reservas.repository.*;
+import com.microservice.reservas.security.PermisosRecurso;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -24,7 +25,7 @@ public class ServicioService {
         Recurso recurso = recursoRepository.findByIdAndActivoTrue(servicioDto.getIdRecurso())
                 .orElseThrow(() -> new RuntimeException("El recurso especificado no existe o está inactivo."));
 
-        validarPermisos(recurso, emailLogueado);
+        PermisosRecurso.validarGestion(recurso, emailLogueado);
 
         Servicio servicio = new Servicio();
         servicio.setNombre(servicioDto.getNombre());
@@ -42,7 +43,7 @@ public class ServicioService {
         Servicio servicio = servicioRepository.findByIdAndActivoTrue(id)
                 .orElseThrow(() -> new RuntimeException("El servicio especificado no existe o está inactivo."));
 
-        validarPermisos(servicio.getRecurso(), emailLogueado);
+        PermisosRecurso.validarGestion(servicio.getRecurso(), emailLogueado);
 
         servicio.setNombre(servicioDto.getNombre());
         servicio.setDescripcion(servicioDto.getDescripcion());
@@ -53,15 +54,25 @@ public class ServicioService {
     }
 
     public List<Servicio> obtenerTodos() {
-        return servicioRepository.findByActivoTrue();
+        return servicioRepository.findByActivoTrue().stream().filter(this::esPublicable).toList();
     }
 
     public Optional<Servicio> obtenerPorId(Long id) {
-        return servicioRepository.findByIdAndActivoTrue(id);
+        return servicioRepository.findByIdAndActivoTrue(id).filter(this::esPublicable);
     }
 
     public List<Servicio> obtenerPorRecurso(Long recursoId) {
+        Recurso recurso = recursoRepository.findByIdAndActivoTrue(recursoId)
+                .orElseThrow(() -> new RuntimeException("El recurso no existe o está inactivo."));
+        if (!Boolean.TRUE.equals(recurso.getNegocio().getActivo())) {
+            throw new RuntimeException("El negocio no existe o está inactivo.");
+        }
         return servicioRepository.findByRecursoIdAndActivoTrue(recursoId);
+    }
+
+    private boolean esPublicable(Servicio servicio) {
+        return Boolean.TRUE.equals(servicio.getRecurso().getActivo())
+                && Boolean.TRUE.equals(servicio.getRecurso().getNegocio().getActivo());
     }
 
     @Transactional
@@ -73,7 +84,7 @@ public class ServicioService {
             throw new RuntimeException("Ya estaba eliminado.");
         }
 
-        validarPermisos(servicio.getRecurso(), emailLogueado);
+        PermisosRecurso.validarGestion(servicio.getRecurso(), emailLogueado);
 
         servicio.setActivo(false);
         servicioRepository.save(servicio);
@@ -89,13 +100,4 @@ public class ServicioService {
         return "Servicio eliminado lógicamente. Se cancelaron " + turnosAfectados.size() + " turnos pendientes.";
     }
 
-    private void validarPermisos(Recurso recurso, String emailLogueado) {
-        String emailOwnerNegocio = recurso.getNegocio().getOwner().getEmail();
-        boolean esElOwner = emailOwnerNegocio.equals(emailLogueado);
-        boolean esElRecurso = recurso.getUsuario() != null && recurso.getUsuario().getEmail().equals(emailLogueado);
-
-        if (!esElOwner && !esElRecurso) {
-            throw new RuntimeException("Acceso denegado: Solo el dueño del negocio o el recurso asignado pueden gestionar servicios.");
-        }
-    }
 }

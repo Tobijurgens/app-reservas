@@ -4,6 +4,7 @@ import api from './api';
 /**
  * @typedef {Object} TurnoDTO
  * @property {number} idServicio
+ * @property {number} [idRecurso] - Se valida contra el recurso del servicio.
  * @property {string} fechaHoraInicio - Formato ISO date-time
  */
 
@@ -65,7 +66,7 @@ export const TurnosService = {
   },
 
   /**
-   * Actualiza el estado de un turno (CONFIRMADO, CANCELADO).
+   * Cancela o consulta idempotentemente CONFIRMADO; no reconfirma turnos cancelados.
    * @param {number} id 
    * @param {string} nuevoEstado 
    */

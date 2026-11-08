@@ -1,5 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { NegociosService } from '../../../services/NegociosService';
+import { mensajeError } from '../../../utils/errores';
 
 export const useMisNegocios = () => {
   const [misNegocios, setMisNegocios] = useState([]);
@@ -7,26 +8,35 @@ export const useMisNegocios = () => {
   const [error, setError] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const fetchMisNegocios = async () => {
-    try {
-      setIsLoading(true);
-      const data = await NegociosService.obtenerMisNegocios();
-      setMisNegocios(data);
-    } catch (err) { 
-      setError("Error al traer negocios"); 
-      console.error(err); 
-    } finally { setIsLoading(false); }
+  const fetchMisNegocios = useCallback((vigente = () => true) => (
+    NegociosService.obtenerMisNegocios()
+      .then(data => {
+        if (vigente()) { setMisNegocios(data); setError(null); }
+      })
+      .catch(err => { if (vigente()) setError(mensajeError(err, 'No pudimos cargar tus negocios. Revisá tu conexión.')); })
+      .finally(() => { if (vigente()) setIsLoading(false); })
+  ), []);
+
+  useEffect(() => {
+    let vigente = true;
+    fetchMisNegocios(() => vigente);
+    return () => { vigente = false; };
+  }, [fetchMisNegocios]);
+
+  const reintentar = () => {
+    setIsLoading(true);
+    setError(null);
+    return fetchMisNegocios();
   };
 
-  useEffect(() => { fetchMisNegocios(); }, []);
-
-  const eliminarNegocio = async (id) => {
+  const eliminarNegocio = async id => {
     try {
       await NegociosService.eliminarNegocio(id);
-      await fetchMisNegocios();
+      setMisNegocios(prev => prev.filter(negocio => negocio.id !== id));
+      await reintentar();
       return { success: true };
-    } catch (err) { 
-      return { success: false, message: err.response?.data?.message || 'Error al eliminar el negocio.' }; 
+    } catch (err) {
+      return { success: false, message: mensajeError(err, 'Error al eliminar el negocio.') };
     }
   };
 
@@ -35,13 +45,12 @@ export const useMisNegocios = () => {
     try {
       if (editingId) await NegociosService.actualizarNegocio(editingId, formData);
       else await NegociosService.crearNegocio(formData);
-      
-      await fetchMisNegocios();
+      await reintentar();
       return { success: true };
-    } catch (err) { 
-      return { success: false, message: err.response?.data?.message || 'Error.' }; 
+    } catch (err) {
+      return { success: false, message: mensajeError(err, 'Error al guardar el negocio.') };
     } finally { setIsSubmitting(false); }
   };
 
-  return { misNegocios, isLoading, error, isSubmitting, eliminarNegocio, guardarNegocio };
+  return { misNegocios, isLoading, error, reintentar, isSubmitting, eliminarNegocio, guardarNegocio };
 };

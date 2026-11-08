@@ -1,5 +1,5 @@
-import { AuthProvider } from './context/AuthContext';
-import { ToastProvider } from './context/ToastContext';
+import { AuthProvider } from './context/AuthProvider';
+import { ToastProvider } from './context/ToastProvider';
 import AppRouter from './routes/AppRouter';
 
 function App() {

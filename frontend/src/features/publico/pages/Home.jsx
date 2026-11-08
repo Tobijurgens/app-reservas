@@ -1,7 +1,7 @@
 import { useState, useContext, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { AuthContext } from '../../../context/AuthContext';
-import { Settings, BriefcaseBusiness, SquarePen, Store, CalendarDays, LogOut, User, ChartPie, UserGroup, Bell, Search} from 'lucide-react';
+import { Store, ChartPie, UserGroup, Bell, Search} from 'lucide-react';
 
 const Home = () => {
   const [negocioId, setNegocioId] = useState('');
@@ -58,12 +58,14 @@ const Home = () => {
               <form onSubmit={handleBuscarNegocio} className="w-full flex flex-col gap-4">
                 <input
                   type="text"
-                  placeholder="Ingresá el nombre o URL del local"
+                  aria-label="Alias del negocio"
+                  placeholder="Ingresá el alias del negocio"
                   value={negocioId}
                   onChange={(e) => setNegocioId(e.target.value)}
                   className="w-full px-5 py-4 bg-gray-50 border-none rounded-xl focus:outline-none focus:ring-2 focus:ring-app-marineblue text-app-black font-medium"
                   required
                 />
+                <p className="text-sm text-app-marineblue">Usá el alias que aparece al final del enlace del negocio.</p>
                 <button type="submit" className="w-full bg-app-marineblue text-white font-bold py-4 px-6 rounded-xl hover:bg-app-black/90 transition-colors shadow-md duration-300">
                   Buscar disponibilidad
                 </button>

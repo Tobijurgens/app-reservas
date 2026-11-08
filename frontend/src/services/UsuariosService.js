@@ -2,18 +2,8 @@
 import api from './api';
 
 export const UsuariosService = {
-  obtenerTodos: async () => {
-    const response = await api.get('/usuarios');
-    return response.data;
-  },
-
-  obtenerPorId: async (id) => {
-    const response = await api.get(`/usuarios/${id}`);
-    return response.data;
-  },
-
-  obtenerPorEmail: async (email) => {
-    const response = await api.get(`/usuarios/email/${email}`);
+  obtenerMiPerfil: async () => {
+    const response = await api.get('/usuarios/perfil');
     return response.data;
   },
 

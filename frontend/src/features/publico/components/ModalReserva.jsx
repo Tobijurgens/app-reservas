@@ -7,21 +7,23 @@ import Register from '../../auth/pages/Register';
 
 import DatePicker, { registerLocale } from 'react-datepicker';
 import { es } from 'date-fns/locale/es';
+import { fechaCalendario, hoyEnNegocio } from '../utils/fechasReserva';
 import 'react-datepicker/dist/react-datepicker.css';
 
 registerLocale('es', es);
 
-const ModalReserva = ({ isOpen, onClose, servicio, recursoId, recursoHorarios = [] }) => {
+const ModalReserva = ({ isOpen, onClose, servicio, recursoId }) => {
   const [fecha, setFecha] = useState(null); 
   const [horarios, setHorarios] = useState([]);
   const [horarioSeleccionadoISO, setHorarioSeleccionadoISO] = useState('');
   const [cargandoHorarios, setCargandoHorarios] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [actualizacionHorarios, setActualizacionHorarios] = useState(0);
 
   // Estados para tachar días llenos
   const [diasLlenos, setDiasLlenos] = useState([]); 
-  const [mesViendo, setMesViendo] = useState(new Date().getMonth() + 1);
-  const [anioViendo, setAnioViendo] = useState(new Date().getFullYear());
+  const [mesViendo, setMesViendo] = useState(() => hoyEnNegocio().getMonth() + 1);
+  const [anioViendo, setAnioViendo] = useState(() => hoyEnNegocio().getFullYear());
 
   const [mostrarModalLogin, setMostrarModalLogin] = useState(false);
   const [mostrarModalRegistro, setMostrarModalRegistro] = useState(false);
@@ -32,6 +34,7 @@ const ModalReserva = ({ isOpen, onClose, servicio, recursoId, recursoHorarios = 
   // EFECTO 1: Traer los días llenos desde el backend
   useEffect(() => {
     if (!isOpen || !recursoId || !servicio) return;
+    let vigente = true;
 
     const fetchDiasLlenos = async () => {
       try {
@@ -44,35 +47,38 @@ const ModalReserva = ({ isOpen, onClose, servicio, recursoId, recursoHorarios = 
         const dataSig = await TurnosService.obtenerDiasLlenos(anioSig, mesSig, recursoId, servicio.id);
         
         const fechasTachadas = [...dataActual, ...dataSig].map(d => new Date(d + 'T00:00:00'));
-        setDiasLlenos(fechasTachadas);
+        if (vigente) setDiasLlenos(fechasTachadas);
       } catch (e) {
         console.error("Error al traer días llenos", e);
       }
     };
     fetchDiasLlenos();
+    return () => { vigente = false; };
   }, [isOpen, recursoId, servicio, mesViendo, anioViendo]);
 
   // EFECTO 2: Traer los horarios del día seleccionado
   useEffect(() => {
     if (!fecha || !isOpen) return;
+    let vigente = true;
 
     const fetchHorarios = async () => {
       setCargandoHorarios(true);
       setHorarioSeleccionadoISO(''); 
       try {
-        const fechaFormateada = fecha.toISOString().split('T')[0];
+        const fechaFormateada = fechaCalendario(fecha);
         const data = await TurnosService.obtenerHorariosDisponibles(fechaFormateada, recursoId, servicio.id);
-        setHorarios(data); 
+        if (vigente) setHorarios(data);
       } catch (err) {
         console.error('Error al traer horarios', err);
-        setHorarios([]);
+        if (vigente) setHorarios([]);
       } finally {
-        setCargandoHorarios(false);
+        if (vigente) setCargandoHorarios(false);
       }
     };
 
     fetchHorarios();
-  }, [fecha, recursoId, servicio?.id, isOpen]);
+    return () => { vigente = false; };
+  }, [fecha, recursoId, servicio?.id, isOpen, actualizacionHorarios]);
 
   const handleClose = () => {
     setFecha(null);
@@ -87,11 +93,17 @@ const ModalReserva = ({ isOpen, onClose, servicio, recursoId, recursoHorarios = 
   const procesarReservaBackend = async () => {
     setIsSubmitting(true);
     try {
-      await TurnosService.crearTurno({ idServicio: servicio.id, fechaHoraInicio: horarioSeleccionadoISO });
+      await TurnosService.crearTurno({ idServicio: servicio.id, idRecurso: recursoId, fechaHoraInicio: horarioSeleccionadoISO });
       addToast('¡Reserva confirmada! En breve recibirás un correo con los detalles.', 'success');
       handleClose();
     } catch (err) {
       if (err.response?.status === 401 || err.response?.status === 403) setMostrarModalLogin(true);
+      else if (err.response?.status === 409) {
+        setHorarioSeleccionadoISO('');
+        setHorarios([]);
+        setActualizacionHorarios((valor) => valor + 1);
+        addToast(err.response?.data?.message || 'Ese horario ya no está disponible. Elegí otro horario.', 'error');
+      }
       else addToast(err.response?.data?.message || 'Error al confirmar la reserva.', 'error');
       setIsSubmitting(false); 
     }
@@ -107,14 +119,6 @@ const ModalReserva = ({ isOpen, onClose, servicio, recursoId, recursoHorarios = 
     procesarReservaBackend();    
   };
 
-  const isDiaDisponible = (date) => {
-    if (!recursoHorarios || recursoHorarios.length === 0) return true;
-    const mapeoDias = ['SUNDAY', 'MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY'];
-    const diaString = mapeoDias[date.getDay()];
-    const configDia = recursoHorarios.find(h => h.diaSemana === diaString);
-    return configDia ? configDia.activo : false;
-  };
-
   // --- LÓGICA DE SEPARACIÓN DE HORARIOS ---
   let turnosMadrugada = [];
   let turnosResto = [];
@@ -128,9 +132,6 @@ const ModalReserva = ({ isOpen, onClose, servicio, recursoId, recursoHorarios = 
 
   // Obtenemos los nombres de los días para los títulos
   const diaActual = fecha ? fecha.toLocaleDateString('es-AR', { weekday: 'long' }) : '';
-  const diaAyerObj = fecha ? new Date(fecha) : new Date();
-  if (fecha) diaAyerObj.setDate(diaAyerObj.getDate() - 1);
-  const diaAyer = diaAyerObj.toLocaleDateString('es-AR', { weekday: 'long' });
 
   // Función auxiliar para renderizar los botones y no repetir código
   const renderBotones = (lista) => {
@@ -173,9 +174,8 @@ const ModalReserva = ({ isOpen, onClose, servicio, recursoId, recursoHorarios = 
               }}
               locale="es"
               dateFormat="dd/MM/yyyy"
-              minDate={new Date()} 
+              minDate={hoyEnNegocio()}
               excludeDates={diasLlenos} 
-              filterDate={isDiaDisponible} 
               placeholderText="dd/mm/aaaa"
               wrapperClassName="w-full"
               className="w-full bg-white border border-gray-200 p-3 rounded-xl shadow-sm focus:ring-2 focus:ring-app-marineblue focus:outline-none text-app-black cursor-pointer"
@@ -202,9 +202,6 @@ const ModalReserva = ({ isOpen, onClose, servicio, recursoId, recursoHorarios = 
                     <div>
                       <h4 className="text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-3 flex items-center gap-2 border-b border-gray-200 pb-1.5">
                         Madrugada del {diaActual}
-                        <span className="text-[9px] bg-gray-200 text-gray-600 px-1.5 py-0.5 rounded normal-case tracking-normal ml-1">
-                          Noche del {diaAyer}
-                        </span>
                       </h4>
                       <div className="grid grid-cols-3 gap-3">
                         {renderBotones(turnosMadrugada)}

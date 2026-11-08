@@ -24,12 +24,12 @@ const Register = ({ isModal = false, isOpen = true, onClose = null, onSuccess = 
     e.preventDefault();
 
     if (formData.password !== formData.confirmPassword) {
-      addToast('Las contraseñas no coinciden', 'warning');
+      addToast('Las contraseñas no coinciden', 'error');
       return;
     }
 
     if (formData.password.length < 6) {
-      addToast('La contraseña debe tener al menos 6 caracteres', 'warning');
+      addToast('La contraseña debe tener al menos 6 caracteres', 'error');
       return;
     }
 

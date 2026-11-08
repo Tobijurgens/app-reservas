@@ -4,20 +4,28 @@ import com.microservice.reservas.dto.event.AvisoInternoEvent;
 import com.microservice.reservas.dto.event.InvitacionEmpleadoEvent;
 import com.microservice.reservas.dto.request.RecursoDTO;
 import com.microservice.reservas.dto.request.HorarioSemanalDTO;
+import com.microservice.reservas.dto.response.InvitacionResponseDTO;
+import com.microservice.reservas.exception.InvitacionException;
 import com.microservice.reservas.entity.*;
 import com.microservice.reservas.enums.EstadoAsociacion;
 import com.microservice.reservas.enums.EstadoCuenta;
 import com.microservice.reservas.enums.EstadoTurno;
 import com.microservice.reservas.repository.*;
 import com.microservice.reservas.util.ValidacionUtil;
+import com.microservice.reservas.util.JornadaUtil;
+import com.microservice.reservas.security.PermisosRecurso;
 import lombok.RequiredArgsConstructor;
-import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.stereotype.Service;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.http.HttpStatus;
 
+import java.time.LocalDateTime;
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.Objects;
 import java.util.UUID;
 
 @Service
@@ -29,7 +37,8 @@ public class RecursoService {
     private final NegocioRepository negocioRepository;
     private final ServicioRepository servicioRepository;
     private final TurnoRepository turnoRepository;
-    private final RabbitTemplate rabbitTemplate;
+    private final OutboxService outboxService;
+    private final NegocioService negocioService;
 
     @Transactional
     public Recurso crearRecurso(RecursoDTO recursoDto, String emailLogueado) {
@@ -37,7 +46,7 @@ public class RecursoService {
                 .orElseThrow(() -> new RuntimeException("El negocio especificado no existe o está inactivo."));
 
         if (!negocio.getOwner().getEmail().equals(emailLogueado)) {
-            throw new RuntimeException("Acceso denegado: Solo el dueño del negocio puede agregar recursos.");
+            throw new AccessDeniedException("Acceso denegado: Solo el dueño del negocio puede agregar recursos.");
         }
 
         ValidacionUtil.validarSemanaCompleta(recursoDto.getHorarios());
@@ -55,8 +64,7 @@ public class RecursoService {
                     .orElseThrow(() -> new RuntimeException("No se encontró ningún usuario activo con el email " + recursoDto.getEmailUsuario()));
 
             recurso.setUsuario(usuario);
-            recurso.setEstadoAsociacion(EstadoAsociacion.PENDIENTE);
-            recurso.setTokenInvitacion(UUID.randomUUID().toString());
+            emitirInvitacion(recurso);
         } else {
             recurso.setEstadoAsociacion(EstadoAsociacion.ACTIVO);
         }
@@ -71,16 +79,26 @@ public class RecursoService {
         return recursoGuardado;
     }
 
+    @Transactional(readOnly = true)
+    public InvitacionResponseDTO obtenerInvitacion(String token) {
+        validarFormatoToken(token);
+        Recurso recurso = recursoRepository.findByTokenInvitacion(token)
+                .orElseThrow(this::invitacionInvalida);
+        validarInvitacion(recurso);
+        return new InvitacionResponseDTO(recurso.getNegocio().getNombre(), recurso.getNombre(),
+                recurso.getFechaExpiracionInvitacion());
+    }
+
     @Transactional
     public String aceptarInvitacion(String token) {
-        Recurso recurso = recursoRepository.findByTokenInvitacion(token)
-                .orElseThrow(() -> new RuntimeException("Token de invitación inválido o inexistente."));
+        Recurso recurso = obtenerInvitacionParaActualizar(token);
 
         recurso.setEstadoAsociacion(EstadoAsociacion.ACTIVO);
         recurso.setTokenInvitacion(null);
+        recurso.setFechaExpiracionInvitacion(null);
         recursoRepository.save(recurso);
 
-        rabbitTemplate.convertAndSend("notificaciones.exchange", "avisos.internos.routing.key",
+        outboxService.encolar("notificaciones.exchange", "avisos.internos.routing.key",
                 new AvisoInternoEvent(recurso.getNegocio().getOwner().getEmail(), "Invitación Aceptada", recurso.getUsuario().getEmail() + " aceptó la invitación para " + recurso.getNombre()));
 
         return "¡Invitación aceptada exitosamente!";
@@ -88,16 +106,16 @@ public class RecursoService {
 
     @Transactional
     public String rechazarInvitacion(String token) {
-        Recurso recurso = recursoRepository.findByTokenInvitacion(token)
-                .orElseThrow(() -> new RuntimeException("Token de invitación inválido o inexistente."));
+        Recurso recurso = obtenerInvitacionParaActualizar(token);
 
         recurso.setEstadoAsociacion(EstadoAsociacion.RECHAZADO);
         recurso.setTokenInvitacion(null);
+        recurso.setFechaExpiracionInvitacion(null);
         Usuario usuarioTemp = recurso.getUsuario();
         recurso.setUsuario(null);
         recursoRepository.save(recurso);
 
-        rabbitTemplate.convertAndSend("notificaciones.exchange", "avisos.internos.routing.key",
+        outboxService.encolar("notificaciones.exchange", "avisos.internos.routing.key",
                 new AvisoInternoEvent(recurso.getNegocio().getOwner().getEmail(), "Invitación Rechazada", (usuarioTemp != null ? usuarioTemp.getEmail() : "Un usuario") + " rechazó tu invitación para " + recurso.getNombre()));
 
         return "Invitación rechazada.";
@@ -105,16 +123,30 @@ public class RecursoService {
 
     @Transactional
     public Recurso actualizarRecurso(Long id, RecursoDTO recursoDto, String emailLogueado) {
-        Recurso recurso = recursoRepository.findByIdAndActivoTrue(id)
+        Recurso recurso = recursoRepository.findByIdActivoParaActualizar(id)
                 .orElseThrow(() -> new RuntimeException("Recurso no encontrado o inactivo."));
 
-        validarPermisos(recurso, emailLogueado);
+        PermisosRecurso.validarGestion(recurso, emailLogueado);
+        boolean esPropietario = PermisosRecurso.esPropietario(recurso, emailLogueado);
+        if (!Objects.equals(recurso.getNegocio().getId(), recursoDto.getIdNegocio())) {
+            throw new AccessDeniedException("Acceso denegado: No se puede cambiar el negocio del recurso.");
+        }
+        if (!esPropietario && (!Objects.equals(recurso.getNombre(), recursoDto.getNombre())
+                || !Objects.equals(recurso.getUsuario().getEmail(), recursoDto.getEmailUsuario()))) {
+            throw new AccessDeniedException("Acceso denegado: Solo el propietario puede cambiar el nombre o la asignación del recurso.");
+        }
         ValidacionUtil.validarSemanaCompleta(recursoDto.getHorarios());
         validarHorarios(recursoDto.getHorarios(), recurso.getNegocio().getHorarios());
 
-        recurso.setNombre(recursoDto.getNombre());
+        if (esPropietario) {
+            recurso.setNombre(recursoDto.getNombre());
+        }
         recurso.setDescripcion(recursoDto.getDescripcion());
         mapearHorarios(recurso, recursoDto.getHorarios());
+
+        if (!esPropietario) {
+            return recursoRepository.save(recurso);
+        }
 
         boolean dispararEvento = false;
 
@@ -122,20 +154,21 @@ public class RecursoService {
 
             boolean requiereInvitacion = recurso.getUsuario() == null ||
                     !recurso.getUsuario().getEmail().equals(recursoDto.getEmailUsuario()) ||
-                    recurso.getEstadoAsociacion() == EstadoAsociacion.RECHAZADO;
+                    recurso.getEstadoAsociacion() == EstadoAsociacion.RECHAZADO ||
+                    (recurso.getEstadoAsociacion() == EstadoAsociacion.PENDIENTE && invitacionVencida(recurso));
 
             if (requiereInvitacion) {
                 Usuario nuevoUsuario = usuarioRepository.findByEmailAndEstadoCuenta(recursoDto.getEmailUsuario(), EstadoCuenta.ACTIVO)
                         .orElseThrow(() -> new RuntimeException("No se encontró ningún usuario activo con ese email."));
 
                 recurso.setUsuario(nuevoUsuario);
-                recurso.setEstadoAsociacion(EstadoAsociacion.PENDIENTE);
-                recurso.setTokenInvitacion(UUID.randomUUID().toString());
+                emitirInvitacion(recurso);
                 dispararEvento = true;
             }
         } else {
             recurso.setUsuario(null);
             recurso.setTokenInvitacion(null);
+            recurso.setFechaExpiracionInvitacion(null);
             recurso.setEstadoAsociacion(EstadoAsociacion.ACTIVO);
         }
 
@@ -149,19 +182,31 @@ public class RecursoService {
     }
 
     public List<Recurso> obtenerTodos() {
-        return recursoRepository.findByActivoTrue();
+        return recursoRepository.findByActivoTrue().stream()
+                .filter(recurso -> Boolean.TRUE.equals(recurso.getNegocio().getActivo())).toList();
     }
 
-    public Optional<Recurso> obtenerPorId(Long id) {
-        return recursoRepository.findByIdAndActivoTrue(id);
+    public Optional<Recurso> obtenerPorId(Long id, String emailLogueado) {
+        return recursoRepository.findByIdAndActivoTrue(id).map(recurso -> {
+            PermisosRecurso.validarGestion(recurso, emailLogueado);
+            return recurso;
+        });
     }
 
     public List<Recurso> obtenerPorNegocio(Long negocioId) {
+        negocioRepository.findByIdAndActivoTrue(negocioId)
+                .orElseThrow(() -> new RuntimeException("El negocio no existe o está inactivo."));
         return recursoRepository.findByNegocioIdAndActivoTrueOrderByNombreAsc(negocioId);
     }
 
-    public List<Recurso> obtenerTodosPorNegocio(Long negocioId) {
-        return recursoRepository.findByNegocioIdOrderByNombreAsc(negocioId);
+    public List<Recurso> obtenerTodosPorNegocio(Long negocioId, String emailLogueado) {
+        Negocio negocio = negocioService.obtenerPorId(negocioId, emailLogueado)
+                .orElseThrow(() -> new RuntimeException("El negocio no existe o está inactivo."));
+        if (negocio.getOwner().getEmail().equals(emailLogueado)) {
+            return recursoRepository.findByNegocioIdOrderByNombreAsc(negocioId);
+        }
+        return recursoRepository.findByNegocioIdAndActivoTrueOrderByNombreAsc(negocioId).stream()
+                .filter(recurso -> PermisosRecurso.esEmpleadoActivo(recurso, emailLogueado)).toList();
     }
 
     @Transactional
@@ -174,7 +219,7 @@ public class RecursoService {
         }
 
         if (!recurso.getNegocio().getOwner().getEmail().equals(emailLogueado)) {
-            throw new RuntimeException("Acceso denegado: Solo el dueño del negocio puede eliminar recursos.");
+            throw new AccessDeniedException("Acceso denegado: Solo el dueño del negocio puede eliminar recursos.");
         }
 
         recurso.setActivo(false);
@@ -202,6 +247,50 @@ public class RecursoService {
         return recursoRepository.findByUsuarioEmailAndActivoTrueOrderByNombreAsc(emailLogueado);
     }
 
+    private void emitirInvitacion(Recurso recurso) {
+        recurso.setEstadoAsociacion(EstadoAsociacion.PENDIENTE);
+        recurso.setTokenInvitacion(UUID.randomUUID().toString());
+        recurso.setFechaExpiracionInvitacion(LocalDateTime.now().plusDays(7));
+    }
+
+    private Recurso obtenerInvitacionParaActualizar(String token) {
+        validarFormatoToken(token);
+        Recurso recurso = recursoRepository.findByTokenInvitacionParaActualizar(token)
+                .orElseThrow(this::invitacionInvalida);
+        validarInvitacion(recurso);
+        return recurso;
+    }
+
+    private void validarFormatoToken(String token) {
+        if (token == null || token.isBlank() || token.length() > 100) {
+            throw invitacionInvalida();
+        }
+    }
+
+    private void validarInvitacion(Recurso recurso) {
+        if (recurso.getEstadoAsociacion() != EstadoAsociacion.PENDIENTE
+                || !Boolean.TRUE.equals(recurso.getActivo())
+                || recurso.getNegocio() == null || !Boolean.TRUE.equals(recurso.getNegocio().getActivo())
+                || recurso.getUsuario() == null || !recurso.getUsuario().isEnabled()) {
+            throw invitacionInvalida();
+        }
+        // Las invitaciones anteriores sin fecha deben renovarse, nunca son perpetuas.
+        if (invitacionVencida(recurso)) {
+            throw new InvitacionException(HttpStatus.GONE,
+                    "La invitación venció o es anterior al sistema de vencimiento. Pedile al propietario que renueve la asignación.");
+        }
+    }
+
+    private boolean invitacionVencida(Recurso recurso) {
+        return recurso.getFechaExpiracionInvitacion() == null
+                || !recurso.getFechaExpiracionInvitacion().isAfter(LocalDateTime.now());
+    }
+
+    private InvitacionException invitacionInvalida() {
+        return new InvitacionException(HttpStatus.NOT_FOUND,
+                "La invitación no es válida, ya fue procesada o dejó de estar disponible.");
+    }
+
     private void dispararEventoInvitacion(Recurso recurso) {
         InvitacionEmpleadoEvent evento = new InvitacionEmpleadoEvent(
                 recurso.getUsuario().getEmail(),
@@ -209,17 +298,7 @@ public class RecursoService {
                 recurso.getNombre(),
                 recurso.getTokenInvitacion()
         );
-        rabbitTemplate.convertAndSend("notificaciones.exchange", "invitacion.email.routing.key", evento);
-    }
-
-    private void validarPermisos(Recurso recurso, String emailLogueado) {
-        String emailOwnerNegocio = recurso.getNegocio().getOwner().getEmail();
-        boolean esElOwner = emailOwnerNegocio.equals(emailLogueado);
-        boolean esElRecurso = recurso.getUsuario() != null && recurso.getUsuario().getEmail().equals(emailLogueado);
-
-        if (!esElOwner && !esElRecurso) {
-            throw new RuntimeException("Acceso denegado: Solo el dueño del negocio o el recurso asignado pueden modificar la configuración.");
-        }
+        outboxService.encolar("notificaciones.exchange", "invitacion.email.routing.key", evento);
     }
 
     private void mapearHorarios(Recurso recurso, List<HorarioSemanalDTO> horariosDto) {
@@ -266,26 +345,22 @@ public class RecursoService {
 
         for (HorarioSemanalDTO hr : horariosRecurso) {
             if (hr.getActivo() == null || !hr.getActivo()) continue;
-
-            HorarioNegocio hn = horariosNegocio.stream()
-                    .filter(h -> h.getDiaSemana() == hr.getDiaSemana())
-                    .findFirst()
-                    .orElseThrow(() -> new RuntimeException("Falta configuración del negocio para el día " + hr.getDiaSemana()));
-
-            if (!hn.getAbierto()) {
-                throw new RuntimeException("El recurso no puede trabajar el " + hr.getDiaSemana() + " porque el negocio está cerrado.");
+            // Fecha de referencia fija: el día semanal es siempre el inicio real de la jornada.
+            LocalDate dia = LocalDate.of(2024, 1, 1).plusDays(hr.getDiaSemana().getValue() - 1L);
+            var jornadaRecurso = JornadaUtil.jornada(dia, hr.getHoraInicio(), hr.getHoraFin());
+            boolean dentroDelNegocio = false;
+            for (LocalDate inicioJornada : List.of(dia.minusDays(1), dia)) {
+                if (horariosNegocio == null) continue;
+                for (HorarioNegocio hn : horariosNegocio) {
+                    if (hn.getDiaSemana() != inicioJornada.getDayOfWeek() || !Boolean.TRUE.equals(hn.getAbierto())) continue;
+                    JornadaUtil.bloques(inicioJornada, hn.getHoraApertura(), hn.getHoraCierre(),
+                            hn.getHoraInicioDescanso(), hn.getHoraFinDescanso());
+                    var jornadaNegocio = JornadaUtil.jornada(inicioJornada, hn.getHoraApertura(), hn.getHoraCierre());
+                    if (jornadaNegocio.contiene(jornadaRecurso.inicio(), jornadaRecurso.fin())) dentroDelNegocio = true;
+                }
             }
-
-            if (hr.getHoraInicio() == null || hr.getHoraFin() == null) {
-                throw new RuntimeException("Debe especificar hora de inicio y fin para los días activos del recurso.");
-            }
-
-            if (hn.getHoraApertura() == null || hn.getHoraCierre() == null) {
-                throw new RuntimeException("El negocio tiene horarios incompletos en el día " + hr.getDiaSemana());
-            }
-
-            if (hr.getHoraInicio().isBefore(hn.getHoraApertura()) || hr.getHoraFin().isAfter(hn.getHoraCierre())) {
-                throw new RuntimeException("El horario del recurso el día " + hr.getDiaSemana() + " excede el horario de apertura del negocio (" + hn.getHoraApertura() + " a " + hn.getHoraCierre() + ").");
+            if (!dentroDelNegocio) {
+                throw new RuntimeException("La jornada del recurso el " + hr.getDiaSemana() + " debe estar dentro del horario del negocio.");
             }
         }
     }

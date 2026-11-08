@@ -21,17 +21,6 @@ api.interceptors.request.use(
   (error) => Promise.reject(error)
 );
 
-// Interceptor de Response: Manejo de errores globales (ej: 401 Unauthorized)
-api.interceptors.response.use(
-  (response) => response,
-  (error) => {
-    if (error.response && error.response.status === 401) {
-      console.warn("Sesión expirada o token inválido.");
-      localStorage.removeItem('token');
-      // No hacemos window.location.href acá para permitir que los modales (como ModalReserva) atajen el error
-    }
-    return Promise.reject(error);
-  }
-);
 
+// AuthProvider sincroniza los 401 privados con el estado de React.
 export default api;

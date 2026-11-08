@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { useLocation, Link, useNavigate } from 'react-router-dom';
+import { useState } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { useMisNegocios } from '../hooks/useMisNegocios';
 import { useMisReservas } from '../hooks/useMisReservas';
 import { esFuturo, esPasado } from '../../../utils/fechas';
@@ -10,14 +10,17 @@ import MisTrabajosList from '../components/MisTrabajosList';
 import TurnoCard from '../components/TurnoCard';
 import ModalDetalleTurno from '../components/ModalDetalleTurno';
 import ModalConfirmacion from '../../../components/ModalConfirmacion';
-import { BriefcaseBusiness, SquarePen, CalendarDays, Store} from 'lucide-react';
+import { SquarePen, Store} from 'lucide-react';
 
 const Dashboard = () => {
   const location = useLocation();
   const navigate = useNavigate();
   const { addToast } = useToast();
   
-  const [activeTab, setActiveTab] = useState(location.state?.tab || 'reservas');
+  const [seleccionTab, setSeleccionTab] = useState(null);
+  const activeTab = seleccionTab?.locationKey === location.key
+    ? seleccionTab.tab : location.state?.tab || 'reservas';
+  const setActiveTab = tab => setSeleccionTab({ locationKey: location.key, tab });
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingNegocio, setEditingNegocio] = useState(null);
   const [filtroReservas, setFiltroReservas] = useState('proximos');
@@ -28,15 +31,8 @@ const Dashboard = () => {
   const [negocioAEliminar, setNegocioAEliminar] = useState(null);
   const [isProcessing, setIsProcessing] = useState(false);
 
-  const { misNegocios, isLoading: loadingNegocios, isSubmitting, eliminarNegocio, guardarNegocio } = useMisNegocios();
-  const { reservas, loading: loadingReservas, cancelarReserva } = useMisReservas();
-
-  useEffect(() => {
-    if (location.state?.tab && location.state.tab !== activeTab) {
-      setActiveTab(location.state.tab);
-      navigate(location.pathname, { replace: true, state: {} });
-    }
-  }, [location, activeTab, navigate]);
+  const { misNegocios, isLoading: loadingNegocios, isSubmitting, error: errorNegocios, reintentar: reintentarNegocios, eliminarNegocio, guardarNegocio } = useMisNegocios();
+  const { reservas, loading: loadingReservas, error: errorReservas, reintentar: reintentarReservas, cancelarReserva } = useMisReservas();
 
   const handleAbrirCrear = () => {
     setEditingNegocio(null);
@@ -107,6 +103,11 @@ const Dashboard = () => {
             
             {loadingReservas ? (
               <div className="flex justify-center py-12"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-app-marineblue"></div></div>
+            ) : errorReservas ? (
+              <div role="alert" className="py-12 text-center text-sm">
+                <p>{errorReservas}</p>
+                <button onClick={reintentarReservas} className="mt-4 font-semibold text-app-marineblue hover:underline">Reintentar</button>
+              </div>
             ) : turnosAMostrar.length > 0 ? (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-10">
                 {turnosAMostrar.map(turno => (
@@ -167,6 +168,11 @@ const Dashboard = () => {
                 
                 {loadingNegocios ? (
                   <div className="flex justify-center py-12"><div className="animate-spin rounded-full h-10 w-10 border-b-2 border-app-marineblue"></div></div>
+                ) : errorNegocios ? (
+                  <div role="alert" className="py-12 text-center text-sm">
+                    <p>{errorNegocios}</p>
+                    <button onClick={reintentarNegocios} className="mt-4 font-semibold text-app-marineblue hover:underline">Reintentar</button>
+                  </div>
                 ) : misNegocios.length > 0 ? (
                   <section className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                     {misNegocios.map(negocio => (
@@ -188,6 +194,7 @@ const Dashboard = () => {
               </>
             ) : (
               <NegocioForm 
+                key={editingNegocio?.id ?? 'nuevo'}
                 initialData={editingNegocio} 
                 onSubmit={handleSubmitForm} 
                 onCancel={() => setIsFormOpen(false)} 

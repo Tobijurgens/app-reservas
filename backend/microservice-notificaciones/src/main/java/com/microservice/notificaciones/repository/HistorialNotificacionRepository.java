@@ -6,11 +6,13 @@ import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.stereotype.Repository;
 import java.util.List;
+import java.util.Optional;
 
 @Repository
 public interface HistorialNotificacionRepository extends JpaRepository<HistorialNotificacion, Long> {
     List<HistorialNotificacion> findByEmailDestinatarioOrderByFechaEnvioDesc(String emailDestinatario);
     long countByEmailDestinatarioAndLeidaFalse(String emailDestinatario);
+    Optional<HistorialNotificacion> findByIdAndEmailDestinatario(Long id, String emailDestinatario);
 
     @Modifying
     @Query("UPDATE HistorialNotificacion h SET h.leida = true WHERE h.emailDestinatario = :email")

@@ -11,7 +11,7 @@ import com.microservice.reservas.repository.TokenSeguridadRepository;
 import com.microservice.reservas.repository.UsuarioRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.amqp.rabbit.core.RabbitTemplate;
+import com.microservice.reservas.service.OutboxService;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -31,7 +31,7 @@ public class AuthService {
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
     private final AuthenticationManager authenticationManager;
-    private final RabbitTemplate rabbitTemplate;
+    private final OutboxService outboxService;
 
     @Transactional
     public String register(RegisterRequest request) {
@@ -67,9 +67,9 @@ public class AuthService {
                 token.getToken()
         );
 
-        rabbitTemplate.convertAndSend("notificaciones.exchange", "registro.email.routing.key", evento);
+        outboxService.encolar("notificaciones.exchange", "registro.email.routing.key", evento);
 
-        log.info("🚀 Evento de registro disparado a RabbitMQ para: {}", usuario.getEmail());
+        log.info("Evento de registro encolado en outbox.");
 
         return "Usuario registrado. Por favor, revisá tu casilla de correo para verificar la cuenta.";
     }
@@ -98,6 +98,10 @@ public class AuthService {
     public String verificarCuenta(String tokenStr) {
         TokenSeguridad token = tokenSeguridadRepository.findByToken(tokenStr)
                 .orElseThrow(() -> new RuntimeException("Token inválido o no encontrado."));
+
+        if (token.getTipo() != TipoToken.VERIFICACION) {
+            throw new RuntimeException("Token inválido para verificar cuentas.");
+        }
 
         if (token.getFechaExpiracion().isBefore(LocalDateTime.now())) {
             tokenSeguridadRepository.delete(token);

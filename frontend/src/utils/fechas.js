@@ -31,3 +31,12 @@ export const ordenarHorariosPorDia = (horarios) => {
   if (!horarios || !Array.isArray(horarios)) return [];
   return [...horarios].sort((a, b) => ORDEN_DIAS[a.diaSemana] - ORDEN_DIAS[b.diaSemana]);
 };
+export const horariosIniciales = (horarios) => {
+  if (horarios?.length) return ordenarHorariosPorDia(horarios).map(horario => ({ ...horario }));
+  return Object.keys(DIAS_ES).map(diaSemana => ({
+    diaSemana,
+    activo: !['SATURDAY', 'SUNDAY'].includes(diaSemana),
+    horaInicio: '09:00', horaFin: '18:00',
+    horaInicioDescanso: '', horaFinDescanso: '',
+  }));
+};

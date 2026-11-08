@@ -45,7 +45,7 @@ const Navbar = () => {
 
   const formatearFecha = (fechaArray) => {
     if (!fechaArray || !Array.isArray(fechaArray)) return '';
-    const [year, month, day, hour, minute] = fechaArray;
+    const [, month, day, hour, minute] = fechaArray;
     return `${day.toString().padStart(2, '0')}/${month.toString().padStart(2, '0')} ${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
   };
 

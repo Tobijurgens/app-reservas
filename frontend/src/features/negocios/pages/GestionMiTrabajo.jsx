@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link, Navigate } from 'react-router-dom';
 import { useGestionMiTrabajo } from '../hooks/useGestionMiTrabajo';
 import { useToast } from '../../../context/ToastContext';
 import RecursoForm from '../components/RecursoForm';
@@ -8,11 +8,12 @@ import AgendaTab from '../components/AgendaTab';
 import HistorialTab from '../components/HistorialTab';
 import ReportesTab from '../components/ReportesTab';
 import ModalConfirmacion from '../../../components/ModalConfirmacion';
+import EstadoInvitacion from '../components/EstadoInvitacion';
 import { Settings, CalendarDays, RotateCcwClock, ChartPie} from 'lucide-react';
 
 const GestionMiTrabajo = () => {
   const { id } = useParams();
-  const { recurso, loading, guardarRecurso, guardarServicio, eliminarServicio } = useGestionMiTrabajo(id);
+  const { recurso, loading, estadoAsociacion, puedeAdministrar, esPropietario, guardarRecurso, guardarServicio, eliminarServicio } = useGestionMiTrabajo(id);
   const { addToast } = useToast();
   
   const [pestañaActiva, setPestañaActiva] = useState('configuracion');
@@ -34,14 +35,33 @@ const GestionMiTrabajo = () => {
 
   const handleConfirmarEliminarServicio = async () => {
     setIsProcessing(true);
-    await eliminarServicio(servicioAEliminar.id);
-    setIsProcessing(false);
-    setServicioAEliminar(null);
-    addToast('Servicio eliminado correctamente.', 'success');
+    try {
+      const resultado = await eliminarServicio(servicioAEliminar.id);
+      if (resultado.success) {
+        setServicioAEliminar(null);
+        addToast('Servicio eliminado correctamente.', 'success');
+      } else {
+        addToast(resultado.message, 'error');
+      }
+    } finally {
+      setIsProcessing(false);
+    }
   };
 
   if (loading) return <div className="p-8 text-center flex justify-center"><div className="animate-spin rounded-full h-10 w-10 border-b-2 border-app-marineblue"></div></div>;
   if (!recurso) return <div className="p-8 text-center text-app-marineblue">No se encontró tu espacio de trabajo.</div>;
+  if (esPropietario) return <Navigate to={`/dashboard/negocio/${recurso.negocioId}`} replace />;
+  if (!puedeAdministrar) {
+    return (
+      <div className="mx-auto max-w-xl px-4 py-12">
+        <div className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
+          <h1 className="text-xl font-bold text-app-black">Acceso a mi trabajo</h1>
+          <EstadoInvitacion estado={estadoAsociacion} />
+          <Link to="/dashboard" state={{ tab: 'trabajos' }} className="mt-6 inline-block font-semibold text-app-marineblue hover:text-app-black">Volver a Mis Trabajos</Link>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -73,7 +93,7 @@ const GestionMiTrabajo = () => {
               </header>
 
               {isFormRecursoOpen && (
-                <RecursoForm initialData={recurso} onSubmit={handleRecursoSubmit} onCancel={() => setIsFormRecursoOpen(false)} isOwner={false} />
+                <RecursoForm key={recurso.id} initialData={recurso} onSubmit={handleRecursoSubmit} onCancel={() => setIsFormRecursoOpen(false)} isOwner={false} />
               )}
 
               <div className="space-y-4">
@@ -86,7 +106,8 @@ const GestionMiTrabajo = () => {
                   onSaveServicio={async (formData, editingId, idRecurso) => {
                      const res = await guardarServicio(formData, editingId, idRecurso);
                      if (res.success) addToast('Servicio guardado exitosamente.', 'success');
-                     else addToast('Error al guardar el servicio', 'error');
+                     else addToast(res.message || 'Error al guardar el servicio', 'error');
+                     return res;
                   }}
                   onDeleteServicio={(id, nombre) => setServicioAEliminar({ id, nombre })}
                 />

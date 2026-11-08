@@ -9,17 +9,21 @@ import com.microservice.reservas.enums.EstadoCuenta;
 import com.microservice.reservas.enums.EstadoTurno;
 import com.microservice.reservas.entity.*;
 import com.microservice.reservas.repository.*;
+import com.microservice.reservas.security.PermisosRecurso;
+import com.microservice.reservas.exception.TurnoException;
+import com.microservice.reservas.util.JornadaUtil;
+import com.microservice.reservas.util.JornadaUtil.Intervalo;
 import lombok.RequiredArgsConstructor;
-import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.annotation.Isolation;
 
-import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
 import java.util.stream.Collectors;
@@ -33,37 +37,52 @@ public class TurnoService {
     private final RecursoRepository recursoRepository;
     private final ServicioRepository servicioRepository;
     private final NegocioRepository negocioRepository;
-    private final RabbitTemplate rabbitTemplate;
+    private final OutboxService outboxService;
 
-    @Transactional
+    @Transactional(isolation = Isolation.READ_COMMITTED)
     public Turno crearTurno(TurnoDTO turnoDto, String emailCliente) {
-        if (turnoDto.getFechaHoraInicio().isBefore(LocalDateTime.now())) {
-            throw new RuntimeException("No se pueden reservar turnos en el pasado.");
+        if (turnoDto == null || turnoDto.getFechaHoraInicio() == null || turnoDto.getIdServicio() == null
+                || turnoDto.getIdServicio() <= 0 || (turnoDto.getIdRecurso() != null && turnoDto.getIdRecurso() <= 0)) {
+            throw new TurnoException(HttpStatus.BAD_REQUEST, "Indicá un servicio, un recurso válido y una fecha de inicio.");
+        }
+        if (!turnoDto.getFechaHoraInicio().isAfter(LocalDateTime.now())) {
+            throw new TurnoException(HttpStatus.BAD_REQUEST, "La fecha del turno debe ser a futuro.");
+        }
+        if (emailCliente == null || emailCliente.isBlank()) {
+            throw new TurnoException(HttpStatus.UNAUTHORIZED, "Iniciá sesión para reservar.");
         }
 
         Usuario cliente = usuarioRepository.findByEmail(emailCliente)
-                .orElseThrow(() -> new RuntimeException("Cliente no encontrado"));
+                .orElseThrow(() -> new TurnoException(HttpStatus.UNAUTHORIZED, "El cliente autenticado no existe."));
 
         if (cliente.getEstadoCuenta() != EstadoCuenta.ACTIVO) {
-            throw new RuntimeException("El cliente está inactivo");
+            throw new AccessDeniedException("La cuenta del cliente no está habilitada para reservar.");
         }
 
         Servicio servicio = servicioRepository.findByIdAndActivoTrue(turnoDto.getIdServicio())
-                .orElseThrow(() -> new RuntimeException("Servicio no encontrado o inactivo"));
+                .orElseThrow(() -> new TurnoException(HttpStatus.NOT_FOUND, "El servicio no existe o está inactivo."));
 
-        Recurso recurso = servicio.getRecurso();
-
-        if (!recurso.getActivo()) {
-            throw new RuntimeException("El recurso asociado a este servicio está inactivo");
+        if (!Boolean.TRUE.equals(servicio.getActivo()) || servicio.getRecurso() == null) {
+            throw new TurnoException(HttpStatus.NOT_FOUND, "El servicio no está disponible.");
         }
+        Long recursoId = turnoDto.getIdRecurso() != null ? turnoDto.getIdRecurso() : servicio.getRecurso().getId();
+        // Todas las creaciones serializan ocupaciones sobre esta misma fila hasta el commit.
+        Recurso recurso = recursoRepository.findByIdActivoParaActualizar(recursoId)
+                .orElseThrow(() -> new TurnoException(HttpStatus.NOT_FOUND, "El recurso no existe o está inactivo."));
+
+        validarRecursoYServicio(recurso, servicio);
 
         LocalDateTime fechaInicio = turnoDto.getFechaHoraInicio();
+        // El inicio puede haber quedado en el pasado mientras esperaba el bloqueo.
+        if (!fechaInicio.isAfter(LocalDateTime.now())) {
+            throw new TurnoException(HttpStatus.BAD_REQUEST, "La fecha del turno debe ser a futuro.");
+        }
         LocalDateTime fechaFin = fechaInicio.plusMinutes(servicio.getDuracionMinutos());
-        EstadoTurno estadoIgnorado = EstadoTurno.CANCELADO;
+        validarHorarioReserva(recurso, fechaInicio, fechaFin);
 
-        boolean ocupado = turnoRepository.existeSolapamiento(recurso.getId(), fechaInicio, fechaFin, estadoIgnorado);
+        boolean ocupado = turnoRepository.existeSolapamiento(recurso.getId(), fechaInicio, fechaFin, EstadoTurno.CONFIRMADO);
         if (ocupado) {
-            throw new RuntimeException("El horario seleccionado ya no se encuentra disponible. Por favor, elige otro.");
+            throw new TurnoException(HttpStatus.CONFLICT, "El horario seleccionado ya no está disponible. Elegí otro horario.");
         }
 
         Turno turno = new Turno();
@@ -81,11 +100,11 @@ public class TurnoService {
         String nombreCliente = cliente.getNombre() + " " + cliente.getApellido();
         String nombreNegocio = recurso.getNegocio().getNombre();
 
-        rabbitTemplate.convertAndSend("notificaciones.exchange", "avisos.internos.routing.key",
+        outboxService.encolar("notificaciones.exchange", "avisos.internos.routing.key",
                 new AvisoInternoEvent(recurso.getNegocio().getOwner().getEmail(), "Nuevo Turno", nombreCliente + " reservó en " + nombreNegocio + "con " + recurso.getNombre()));
 
         if (recurso.getUsuario() != null && !recurso.getUsuario().getEmail().equals(recurso.getNegocio().getOwner().getEmail())) {
-            rabbitTemplate.convertAndSend("notificaciones.exchange", "avisos.internos.routing.key",
+            outboxService.encolar("notificaciones.exchange", "avisos.internos.routing.key",
                     new AvisoInternoEvent(recurso.getUsuario().getEmail(), "Nuevo Turno Asignado", nombreCliente + " reservó con vos en " + nombreNegocio));
         }
         return turnoGuardado;
@@ -93,13 +112,20 @@ public class TurnoService {
 
     @Transactional
     public Turno actualizarEstado(Long id, EstadoTurno nuevoEstado, String emailLogueado) {
-        Turno turno = turnoRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("El turno especificado no existe."));
+        Turno turno = turnoRepository.findByIdParaActualizar(id)
+                .orElseThrow(() -> new TurnoException(HttpStatus.NOT_FOUND, "El turno no existe."));
 
         validarPermisosDeModificacion(turno, emailLogueado);
-
-        turno.setEstado(nuevoEstado);
-        return turnoRepository.save(turno);
+        if (nuevoEstado == null) {
+            throw new TurnoException(HttpStatus.BAD_REQUEST, "Indicá el nuevo estado.");
+        }
+        if (nuevoEstado == EstadoTurno.CONFIRMADO) {
+            if (turno.getEstado() != EstadoTurno.CONFIRMADO) {
+                throw new TurnoException(HttpStatus.CONFLICT, "No se puede reconfirmar un turno cancelado. Creá una nueva reserva.");
+            }
+            return turno; // Repetir CONFIRMADO no ocupa otro intervalo ni vuelve a guardar.
+        }
+        return cancelarTurnoValidado(turno);
     }
 
     public Page<Turno> obtenerTurnosPorNegocio(Long negocioId, Pageable pageable, String emailLogueado) {
@@ -107,7 +133,7 @@ public class TurnoService {
                 .orElseThrow(() -> new RuntimeException("El negocio no existe."));
 
         if (!negocio.getOwner().getEmail().equals(emailLogueado)) {
-            throw new RuntimeException("Acceso denegado: Solo el dueño puede ver todos los turnos del negocio.");
+            throw new AccessDeniedException("Acceso denegado: Solo el dueño puede ver todos los turnos del negocio.");
         }
         return turnoRepository.findByNegocioIdDesc(negocioId, pageable);
     }
@@ -116,7 +142,7 @@ public class TurnoService {
         Recurso recurso = recursoRepository.findByIdAndActivoTrue(recursoId)
                 .orElseThrow(() -> new RuntimeException("El recurso no existe."));
 
-        validarPermisosAcceso(recurso, emailLogueado);
+        PermisosRecurso.validarGestion(recurso, emailLogueado);
         return turnoRepository.findByRecursoIdDesc(recursoId, pageable);
     }
 
@@ -139,7 +165,7 @@ public class TurnoService {
         Recurso recurso = recursoRepository.findByIdAndActivoTrue(recursoId)
                 .orElseThrow(() -> new RuntimeException("El recurso no existe."));
 
-        validarPermisosAcceso(recurso, emailLogueado);
+        PermisosRecurso.validarGestion(recurso, emailLogueado);
         return turnoRepository.findByRecursoId(recursoId);
     }
 
@@ -147,20 +173,24 @@ public class TurnoService {
         Recurso recurso = recursoRepository.findByIdAndActivoTrue(recursoId)
                 .orElseThrow(() -> new RuntimeException("El recurso no existe."));
 
-        validarPermisosAcceso(recurso, emailLogueado);
-        return turnoRepository.findTurnosOcupados(recursoId, inicioDia, finDia, EstadoTurno.CANCELADO);
+        PermisosRecurso.validarGestion(recurso, emailLogueado);
+        return turnoRepository.findTurnosOcupados(recursoId, inicioDia, finDia, EstadoTurno.CONFIRMADO);
     }
 
     @Transactional
     public String cancelarTurno(Long id, String emailLogueado) {
-        Turno turno = turnoRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("El turno no existe."));
-
-        if (turno.getEstado() == EstadoTurno.CANCELADO) {
-            throw new RuntimeException("El turno ya se encontraba cancelado.");
-        }
+        Turno turno = turnoRepository.findByIdParaActualizar(id)
+                .orElseThrow(() -> new TurnoException(HttpStatus.NOT_FOUND, "El turno no existe."));
 
         validarPermisosDeModificacion(turno, emailLogueado);
+        cancelarTurnoValidado(turno);
+        return "Turno cancelado correctamente.";
+    }
+
+    private Turno cancelarTurnoValidado(Turno turno) {
+        if (turno.getEstado() == EstadoTurno.CANCELADO) {
+            throw new TurnoException(HttpStatus.CONFLICT, "El turno ya se encontraba cancelado.");
+        }
 
         turno.setEstado(EstadoTurno.CANCELADO);
         Turno turnoCancelado = turnoRepository.save(turno);
@@ -170,150 +200,119 @@ public class TurnoService {
         String nombreCliente = turno.getCliente().getNombre() + " " + turno.getCliente().getApellido();
 
         // Aviso al dueño
-        rabbitTemplate.convertAndSend("notificaciones.exchange", "avisos.internos.routing.key",
+        outboxService.encolar("notificaciones.exchange", "avisos.internos.routing.key",
                 new AvisoInternoEvent(turno.getRecurso().getNegocio().getOwner().getEmail(), "Turno Cancelado", nombreCliente + " canceló su turno."));
 
         // Aviso al recurso
         if (turno.getRecurso().getUsuario() != null && !turno.getRecurso().getUsuario().getEmail().equals(turno.getRecurso().getNegocio().getOwner().getEmail())) {
-            rabbitTemplate.convertAndSend("notificaciones.exchange", "avisos.internos.routing.key",
+            outboxService.encolar("notificaciones.exchange", "avisos.internos.routing.key",
                     new AvisoInternoEvent(turno.getRecurso().getUsuario().getEmail(), "Turno Cancelado", nombreCliente + " canceló su turno con vos."));
         }
 
-        return "Turno cancelado correctamente.";
+        return turnoCancelado;
     }
 
+    @Transactional(readOnly = true)
     public List<HorarioDisponibleDTO> obtenerHorariosDisponibles(LocalDate fecha, Long recursoId, Long servicioId) {
-        if (fecha.isBefore(LocalDate.now())) {
-            return new ArrayList<>();
-        }
+        if (fecha.isBefore(LocalDate.now())) return new ArrayList<>();
 
         Recurso recurso = recursoRepository.findByIdAndActivoTrue(recursoId)
-                .orElseThrow(() -> new RuntimeException("Recurso no encontrado"));
+                .orElseThrow(() -> new TurnoException(HttpStatus.NOT_FOUND, "El recurso no existe o está inactivo."));
         Servicio servicio = servicioRepository.findByIdAndActivoTrue(servicioId)
-                .orElseThrow(() -> new RuntimeException("Servicio no encontrado"));
+                .orElseThrow(() -> new TurnoException(HttpStatus.NOT_FOUND, "El servicio no existe o está inactivo."));
+        validarRecursoYServicio(recurso, servicio);
 
-        DayOfWeek diaHoy = fecha.getDayOfWeek();
-        DayOfWeek diaAyer = fecha.minusDays(1).getDayOfWeek();
+        List<Intervalo> bloques = bloquesReserva(recurso, fecha);
+        if (bloques.isEmpty()) return new ArrayList<>();
+        LocalDateTime desde = bloques.stream().map(Intervalo::inicio).min(Comparator.naturalOrder()).orElseThrow();
+        LocalDateTime hasta = bloques.stream().map(Intervalo::fin).max(Comparator.naturalOrder()).orElseThrow();
+        // Incluye ocupaciones iniciadas antes del día y las que empiezan después de medianoche.
+        List<Turno> ocupados = turnoRepository.findTurnosOcupados(recursoId, desde, hasta, EstadoTurno.CONFIRMADO)
+                .stream().sorted(Comparator.comparing(Turno::getFechaHoraInicio)).toList();
 
-        HorarioRecurso hRecursoHoy = recurso.getHorarios().stream()
-                .filter(h -> h.getDiaSemana() == diaHoy && h.getActivo())
-                .findFirst().orElse(null);
-
-        HorarioRecurso hRecursoAyer = recurso.getHorarios().stream()
-                .filter(h -> h.getDiaSemana() == diaAyer && h.getActivo())
-                .findFirst().orElse(null);
-
-        List<BloqueTiempo> bloquesCompletos = new ArrayList<>();
-
-        // 1. Armar la línea de tiempo real de AYER
-        if (hRecursoAyer != null) {
-            bloquesCompletos.addAll(generarBloquesAbsolutos(fecha.minusDays(1), hRecursoAyer, true));
-        }
-
-        // 2. Armar la línea de tiempo real de HOY
-        if (hRecursoHoy != null) {
-            bloquesCompletos.addAll(generarBloquesAbsolutos(fecha, hRecursoHoy, false));
-        }
-
-        // 3. Filtrar con un "molde": Solo nos quedamos con los pedazos de tiempo que caen exactamente en el día que el cliente tocó (de 00:00 a 23:59)
-        LocalDateTime inicioDiaFiltro = fecha.atStartOfDay();
-        LocalDateTime finDiaFiltro = fecha.atTime(LocalTime.MAX);
-
-        List<BloqueTiempo> bloquesEfectivos = new ArrayList<>();
-        for (BloqueTiempo b : bloquesCompletos) {
-            LocalDateTime maxInicio = b.inicio.isAfter(inicioDiaFiltro) ? b.inicio : inicioDiaFiltro;
-            LocalDateTime minFin = b.fin.isBefore(finDiaFiltro) ? b.fin : finDiaFiltro;
-
-            // Si hay intersección válida, lo guardamos
-            if (maxInicio.isBefore(minFin)) {
-                bloquesEfectivos.add(new BloqueTiempo(maxInicio, minFin, b.esDeAyer));
-            }
-        }
-
-        // Ordenamos estrictamente por orden cronológico de los bloques
-        bloquesEfectivos.sort(Comparator.comparing(b -> b.inicio));
-
-        List<HorarioDisponibleDTO> horarios = new ArrayList<>();
-        int duracionServicio = servicio.getDuracionMinutos();
-        DateTimeFormatter formatterHora = DateTimeFormatter.ofPattern("HH:mm");
-
-        for (BloqueTiempo bloque : bloquesEfectivos) {
-            List<Turno> turnosDelBloque = turnoRepository.findTurnosOcupados(
-                    recursoId, bloque.inicio, bloque.fin, EstadoTurno.CANCELADO
-            );
-            turnosDelBloque.sort(Comparator.comparing(Turno::getFechaHoraInicio));
-
-            LocalDateTime puntero = bloque.inicio;
-
-            for (Turno turnoOcupado : turnosDelBloque) {
-                LocalDateTime inicioTurnoOcupado = turnoOcupado.getFechaHoraInicio();
-                LocalDateTime finTurnoOcupado = turnoOcupado.getFechaHoraFin();
-
-                while (!puntero.plusMinutes(duracionServicio).isAfter(inicioTurnoOcupado)) {
-                    if (!puntero.plusMinutes(duracionServicio).isAfter(bloque.fin)) {
-                        horarios.add(new HorarioDisponibleDTO(puntero.format(formatterHora), puntero.toString(), true));
-                    }
-                    puntero = puntero.plusMinutes(duracionServicio);
-                }
-                if (puntero.isBefore(finTurnoOcupado)) {
-                    puntero = finTurnoOcupado;
-                }
-            }
-
-            while (!puntero.plusMinutes(duracionServicio).isAfter(bloque.fin)) {
-                horarios.add(new HorarioDisponibleDTO(puntero.format(formatterHora), puntero.toString(), true));
-                puntero = puntero.plusMinutes(duracionServicio);
-            }
-        }
-
-        // Eliminamos los duplicados generados por la lógica de solapamiento
-        List<HorarioDisponibleDTO> horariosUnicos = horarios.stream()
-                .distinct()
-                .collect(Collectors.toList());
-
-        // Eliminamos los turnos que ya pasaron el día de hoy
+        Map<LocalDateTime, HorarioDisponibleDTO> horarios = new TreeMap<>();
+        int duracion = servicio.getDuracionMinutos();
         LocalDateTime ahora = LocalDateTime.now();
-        horariosUnicos.removeIf(h -> LocalDateTime.parse(h.getFechaHoraISO()).isBefore(ahora));
-
-        // 🔥 ORDEN FINAL ESTRICTO POR FECHA Y HORA ABSOLUTA 🔥
-        // Esto garantiza que 2026-09-25T22:00 aparezca ANTES que 2026-09-26T00:00
-        horariosUnicos.sort(Comparator.comparing(h -> LocalDateTime.parse(h.getFechaHoraISO())));
-
-        return horariosUnicos;
+        for (Intervalo bloque : bloques) {
+            LocalDateTime puntero = bloque.inicio();
+            for (Turno ocupado : ocupados) {
+                if (!ocupado.getFechaHoraInicio().isBefore(bloque.fin())
+                        || !ocupado.getFechaHoraFin().isAfter(bloque.inicio())) continue;
+                while (!puntero.plusMinutes(duracion).isAfter(ocupado.getFechaHoraInicio())
+                        && !puntero.plusMinutes(duracion).isAfter(bloque.fin())) {
+                    agregarHorario(horarios, puntero, fecha, ahora);
+                    puntero = puntero.plusMinutes(duracion);
+                }
+                if (puntero.isBefore(ocupado.getFechaHoraFin())) puntero = ocupado.getFechaHoraFin();
+            }
+            while (!puntero.plusMinutes(duracion).isAfter(bloque.fin())) {
+                agregarHorario(horarios, puntero, fecha, ahora);
+                puntero = puntero.plusMinutes(duracion);
+            }
+        }
+        return new ArrayList<>(horarios.values());
     }
 
-    /**
-     * Convierte las horas sueltas (LocalTime) en Fechas y Horas exactas (LocalDateTime).
-     * Si detecta que una hora de fin es menor a la de inicio, automáticamente asume que es del día siguiente.
-     */
-    private List<BloqueTiempo> generarBloquesAbsolutos(LocalDate fechaReferencia, HorarioRecurso hr, boolean esDeAyer) {
-        List<BloqueTiempo> bloques = new ArrayList<>();
-
-        LocalDateTime inicioReal = fechaReferencia.atTime(hr.getHoraInicio());
-        LocalDateTime finReal = fechaReferencia.atTime(hr.getHoraFin());
-
-        // Si cierra más temprano de lo que abre, es porque cruzó la medianoche
-        if (hr.getHoraFin().isBefore(hr.getHoraInicio())) {
-            finReal = finReal.plusDays(1);
+    private void agregarHorario(Map<LocalDateTime, HorarioDisponibleDTO> horarios, LocalDateTime inicio,
+            LocalDate fecha, LocalDateTime ahora) {
+        // Se filtra por la fecha de INICIO, sin truncar el fin de la reserva a medianoche.
+        if (inicio.toLocalDate().equals(fecha) && inicio.isAfter(ahora)) {
+            horarios.put(inicio, new HorarioDisponibleDTO(inicio.format(DateTimeFormatter.ofPattern("HH:mm")),
+                    inicio.toString(), true));
         }
+    }
 
-        // Si tiene descanso, partimos el bloque en dos
-        if (hr.getHoraInicioDescanso() != null && hr.getHoraFinDescanso() != null) {
-            LocalDateTime iDescansoReal = fechaReferencia.atTime(hr.getHoraInicioDescanso());
-            LocalDateTime fDescansoReal = fechaReferencia.atTime(hr.getHoraFinDescanso());
-
-            // Acomodamos los días del descanso si cruzaron la medianoche
-            if (hr.getHoraInicioDescanso().isBefore(hr.getHoraInicio())) iDescansoReal = iDescansoReal.plusDays(1);
-            if (hr.getHoraFinDescanso().isBefore(hr.getHoraInicio())) fDescansoReal = fDescansoReal.plusDays(1);
-
-            bloques.add(new BloqueTiempo(inicioReal, iDescansoReal, esDeAyer));
-            bloques.add(new BloqueTiempo(fDescansoReal, finReal, esDeAyer));
-        } else {
-            // Si no hay descanso, es un solo bloque de corrido
-            bloques.add(new BloqueTiempo(inicioReal, finReal, esDeAyer));
+    private void validarRecursoYServicio(Recurso recurso, Servicio servicio) {
+        if (!Boolean.TRUE.equals(servicio.getActivo()) || servicio.getRecurso() == null) {
+            throw new TurnoException(HttpStatus.NOT_FOUND, "El servicio no está disponible.");
         }
+        if (!Objects.equals(servicio.getRecurso().getId(), recurso.getId())) {
+            throw new TurnoException(HttpStatus.BAD_REQUEST, "El servicio no pertenece al recurso indicado.");
+        }
+        if (!Boolean.TRUE.equals(recurso.getActivo())) {
+            throw new TurnoException(HttpStatus.NOT_FOUND, "El recurso no existe o está inactivo.");
+        }
+        if (recurso.getNegocio() == null || !Boolean.TRUE.equals(recurso.getNegocio().getActivo())) {
+            throw new TurnoException(HttpStatus.CONFLICT, "El negocio está inactivo y no admite reservas.");
+        }
+        if (servicio.getDuracionMinutos() == null || servicio.getDuracionMinutos() <= 0) {
+            throw new TurnoException(HttpStatus.BAD_REQUEST, "El servicio debe tener una duración positiva.");
+        }
+    }
 
-        return bloques;
+    private void validarHorarioReserva(Recurso recurso, LocalDateTime inicio, LocalDateTime fin) {
+        if (bloquesReserva(recurso, inicio.toLocalDate()).stream().noneMatch(b -> b.contiene(inicio, fin))) {
+            throw new TurnoException(HttpStatus.BAD_REQUEST,
+                    "El turno debe estar dentro de la jornada del recurso y del negocio, sin ocupar descansos.");
+        }
+    }
+
+    private List<Intervalo> bloquesReserva(Recurso recurso, LocalDate fecha) {
+        List<Intervalo> delRecurso = new ArrayList<>();
+        List<Intervalo> delNegocio = new ArrayList<>();
+        for (LocalDate dia : List.of(fecha.minusDays(1), fecha)) {
+            if (recurso.getHorarios() != null) {
+                recurso.getHorarios().stream()
+                        .filter(h -> h.getDiaSemana() == dia.getDayOfWeek() && Boolean.TRUE.equals(h.getActivo()))
+                        .forEach(h -> delRecurso.addAll(JornadaUtil.bloques(dia, h.getHoraInicio(), h.getHoraFin(),
+                                h.getHoraInicioDescanso(), h.getHoraFinDescanso())));
+            }
+            if (recurso.getNegocio().getHorarios() != null) {
+                recurso.getNegocio().getHorarios().stream()
+                        .filter(h -> h.getDiaSemana() == dia.getDayOfWeek() && Boolean.TRUE.equals(h.getAbierto()))
+                        .forEach(h -> delNegocio.addAll(JornadaUtil.bloques(dia, h.getHoraApertura(), h.getHoraCierre(),
+                                h.getHoraInicioDescanso(), h.getHoraFinDescanso())));
+            }
+        }
+        List<Intervalo> intersecciones = new ArrayList<>();
+        for (Intervalo horarioRecurso : delRecurso) {
+            for (Intervalo horarioNegocio : delNegocio) {
+                Intervalo bloque = horarioRecurso.interseccion(horarioNegocio);
+                if (bloque != null && bloque.inicio().isBefore(fecha.plusDays(1).atStartOfDay())
+                        && bloque.fin().isAfter(fecha.atStartOfDay())) intersecciones.add(bloque);
+            }
+        }
+        return intersecciones.stream().distinct().sorted(Comparator.comparing(Intervalo::inicio)).toList();
     }
 
     public ReporteResponseDTO generarReporteNegocio(Long negocioId, Long recursoId, LocalDateTime fechaInicio, LocalDateTime fechaFin, String emailLogueado) {
@@ -322,16 +321,18 @@ public class TurnoService {
 
         boolean esOwner = negocio.getOwner().getEmail().equals(emailLogueado);
 
-        if (!esOwner) {
-            if (recursoId == null) {
-                throw new RuntimeException("Acceso denegado: Solo el dueño puede ver los reportes globales del negocio.");
+        if (recursoId == null) {
+            if (!esOwner) {
+                throw new AccessDeniedException("Acceso denegado: Solo el dueño puede ver los reportes globales del negocio.");
             }
+        } else {
             Recurso recurso = recursoRepository.findById(recursoId)
                     .orElseThrow(() -> new RuntimeException("El recurso no existe."));
 
-            if (recurso.getUsuario() == null || !recurso.getUsuario().getEmail().equals(emailLogueado)) {
-                throw new RuntimeException("Acceso denegado: Solo podés ver tus propios reportes.");
+            if (!Objects.equals(recurso.getNegocio().getId(), negocioId)) {
+                throw new AccessDeniedException("Acceso denegado: El recurso no pertenece al negocio solicitado.");
             }
+            PermisosRecurso.validarGestion(recurso, emailLogueado);
         }
 
         List<Turno> turnos;
@@ -392,6 +393,7 @@ public class TurnoService {
         return reporte;
     }
 
+    @Transactional(readOnly = true)
     public List<LocalDate> obtenerDiasLlenos(int anio, int mes, Long recursoId, Long servicioId) {
         List<LocalDate> diasLlenos = new ArrayList<>();
         LocalDate inicioMes = LocalDate.of(anio, mes, 1);
@@ -429,43 +431,14 @@ public class TurnoService {
                 tipoEvento
         );
 
-        rabbitTemplate.convertAndSend("notificaciones.exchange", "turno.cliente.routing.key", evento);
+        outboxService.encolar("notificaciones.exchange", "turno.cliente.routing.key", evento);
     }
 
     private void validarPermisosDeModificacion(Turno turno, String emailLogueado) {
         boolean esElCliente = turno.getCliente().getEmail().equals(emailLogueado);
-        boolean esElOwner = turno.getRecurso().getNegocio().getOwner().getEmail().equals(emailLogueado);
-        boolean esElRecurso = turno.getRecurso().getUsuario() != null &&
-                turno.getRecurso().getUsuario().getEmail().equals(emailLogueado);
-
-        if (!esElCliente && !esElOwner && !esElRecurso) {
-            throw new RuntimeException("Acceso denegado: No tenés permisos para cancelar o modificar este turno.");
+        if (!esElCliente) {
+            PermisosRecurso.validarGestion(turno.getRecurso(), emailLogueado);
         }
     }
 
-    private void validarPermisosAcceso(Recurso recurso, String emailLogueado) {
-        String emailOwner = recurso.getNegocio().getOwner().getEmail();
-        boolean esElOwner = emailOwner.equals(emailLogueado);
-        boolean esElRecurso = recurso.getUsuario() != null && recurso.getUsuario().getEmail().equals(emailLogueado);
-
-        if (!esElOwner && !esElRecurso) {
-            throw new RuntimeException("Acceso denegado: No tenés permisos para ver esta información.");
-        }
-        if (esElRecurso && !esElOwner && recurso.getEstadoAsociacion() != com.microservice.reservas.enums.EstadoAsociacion.ACTIVO) {
-            throw new RuntimeException("Acceso denegado: Debés aceptar la invitación en tu correo antes de poder ver la agenda.");
-        }
-    }
-
-    // Clase auxiliar para reemplazar al viejo Rango
-    private static class BloqueTiempo {
-        LocalDateTime inicio;
-        LocalDateTime fin;
-        boolean esDeAyer;
-
-        BloqueTiempo(LocalDateTime inicio, LocalDateTime fin, boolean esDeAyer) {
-            this.inicio = inicio;
-            this.fin = fin;
-            this.esDeAyer = esDeAyer;
-        }
-    }
 }

@@ -1,15 +1,16 @@
 import { useState } from 'react';
 import { useReportesNegocio } from '../hooks/useReportesNegocio';
-import { Settings, BriefcaseBusiness, SquarePen, Store, CalendarDays, LogOut, Bell, User, Star, ChartPie, UserGroup} from 'lucide-react';
+import { Star, ChartPie, UserGroup } from 'lucide-react';
+import { fechaCalendario, hoyEnNegocio } from '../../publico/utils/fechasReserva';
 
 const ReportesTab = ({ negocioId, recursos = [], esOwner = true, miRecursoId = null }) => {
-  const hoyStr = new Date().toISOString().split('T')[0];
+  const hoyStr = fechaCalendario(hoyEnNegocio());
   const FECHA_HISTORICA = '2020-01-01';
   
   const getFechaDiasAtras = (dias) => {
-    const d = new Date();
+    const d = hoyEnNegocio();
     d.setDate(d.getDate() - dias);
-    return d.toISOString().split('T')[0];
+    return fechaCalendario(d);
   };
 
   const [filtroRapido, setFiltroRapido] = useState('completo'); 
@@ -17,7 +18,7 @@ const ReportesTab = ({ negocioId, recursos = [], esOwner = true, miRecursoId = n
   const [fechaFin, setFechaFin] = useState(hoyStr);
   const [recursoFiltroId, setRecursoFiltroId] = useState(esOwner ? 'todos' : miRecursoId); 
 
-  const { reporte, loading } = useReportesNegocio(negocioId, fechaInicio, fechaFin, recursoFiltroId);
+  const { reporte, loading, error, reintentar } = useReportesNegocio(negocioId, fechaInicio, fechaFin, recursoFiltroId);
 
   const handleFiltroRapidoChange = (e) => {
     const tipo = e.target.value;
@@ -126,6 +127,13 @@ const ReportesTab = ({ negocioId, recursos = [], esOwner = true, miRecursoId = n
       {loading ? (
         <div className="flex-1 flex justify-center items-center py-12">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-app-marineblue"></div>
+        </div>
+      ) : error ? (
+        <div role="alert" className="py-12 text-center text-sm">
+          <p>{error}</p>
+          {fechaInicio && fechaFin && fechaInicio <= fechaFin && (
+            <button onClick={reintentar} className="mt-4 font-semibold text-app-marineblue hover:underline">Reintentar</button>
+          )}
         </div>
       ) : !reporte || reporte.totalTurnos === 0 ? (
         <div className="text-center py-16 bg-app-white rounded-2xl border border-dashed border-gray-200">

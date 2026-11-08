@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useHistorialNegocio } from '../hooks/useHistorialNegocio';
 import { useHistorialRecurso } from '../hooks/useHistorialRecurso';
 import { TurnosService } from '../../../services/TurnosService';
@@ -21,11 +21,9 @@ const HistorialTab = ({ negocioId, recursoId, recursos = [] }) => {
   const [turnoACancelar, setTurnoACancelar] = useState(null);
   const [isCancelando, setIsCancelando] = useState(false);
   
-  const [turnosLocales, setTurnosLocales] = useState([]);
-
-  useEffect(() => {
-     setTurnosLocales(turnos || []);
-  }, [turnos]);
+  const [cancelados, setCancelados] = useState([]);
+  const turnosLocales = (turnos || []).map(turno => cancelados.includes(turno.id)
+    ? { ...turno, estado: 'CANCELADO' } : turno);
 
   const obtenerLimiteDias = (dias) => {
     const d = new Date();
@@ -52,11 +50,7 @@ const HistorialTab = ({ negocioId, recursoId, recursos = [] }) => {
     try {
       await TurnosService.cancelarTurno(turnoACancelar.id);
       
-      setTurnosLocales(prevTurnos => 
-        prevTurnos.map(t => 
-          t.id === turnoACancelar.id ? { ...t, estado: 'CANCELADO' } : t
-        )
-      );
+      setCancelados(prev => [...prev, turnoACancelar.id]);
       
       setTurnoACancelar(null);
     } catch (error) {
@@ -74,6 +68,7 @@ const HistorialTab = ({ negocioId, recursoId, recursos = [] }) => {
             {recursoId ? 'Mi Historial de Turnos' : 'Historial Global del Negocio'}
           </h2>
           <p className="text-sm text-app-marineblue mt-1">Total de registros: {totalTurnos}</p>
+          <p className="mt-2 text-xs text-gray-500">Los filtros se aplican únicamente a los registros de esta página.</p>
         </div>
         
         <div className="flex flex-col sm:flex-row gap-3 w-full md:w-auto">

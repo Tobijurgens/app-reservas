@@ -1,4 +1,4 @@
-import { CalendarDays, BriefcaseBusiness, User, UserGroup, Phone, AlarmClock, Info } from 'lucide-react';
+import { BriefcaseBusiness, User, UserGroup, Phone, AlarmClock, Info } from 'lucide-react';
 import { esPasado } from '../../../utils/fechas';
 
 const TurnoCard = ({ 

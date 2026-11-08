@@ -1,33 +1,42 @@
 import { useState, useEffect } from 'react';
 import { TurnosService } from '../../../services/TurnosService';
+import { useToast } from '../../../context/ToastContext';
+import { mensajeError } from '../../../utils/errores';
 
-export const useAgendaRecurso = (recursoId) => {
-  const [turnos, setTurnos] = useState([]);
-  const [loading, setLoading] = useState(true);
+export const useAgendaRecurso = recursoId => {
+  const [resultado, setResultado] = useState(null);
+  const [intento, setIntento] = useState(0);
+  const { addToast } = useToast();
 
   useEffect(() => {
     if (!recursoId) return;
-    const fetchAgenda = async () => {
-      try {
-        setLoading(true);
-        const data = await TurnosService.obtenerAgendaRecurso(recursoId);
-        setTurnos(data);
-      } catch (error) { console.error('Error al cargar agenda del recurso:', error); } 
-      finally { setLoading(false); }
-    };
-    fetchAgenda();
-  }, [recursoId]);
+    let vigente = true;
+    TurnosService.obtenerAgendaRecurso(recursoId)
+      .then(turnos => { if (vigente) setResultado({ recursoId, intento, turnos, error: null }); })
+      .catch(error => {
+        if (vigente) setResultado({ recursoId, intento, turnos: [], error: mensajeError(error, 'No pudimos cargar esta agenda. Revisá tu conexión o tus permisos.') });
+      });
+    return () => { vigente = false; };
+  }, [recursoId, intento]);
 
-  const cancelarTurno = async (idTurno) => {
+  const loading = Boolean(recursoId) && (resultado?.recursoId !== recursoId || resultado?.intento !== intento);
+  const actual = !loading && resultado?.recursoId === recursoId ? resultado : null;
+
+  const cancelarTurno = async idTurno => {
     try {
       await TurnosService.cancelarTurno(idTurno);
-      setTurnos(prev => prev.map(t => t.id === idTurno ? { ...t, estado: 'CANCELADO' } : t));
+      setResultado(prev => prev?.recursoId === recursoId ? {
+        ...prev, turnos: prev.turnos.map(turno => turno.id === idTurno ? { ...turno, estado: 'CANCELADO' } : turno),
+      } : prev);
       return true;
     } catch (error) {
-      alert(error.response?.data?.message || 'Error al cancelar el turno.');
+      addToast(mensajeError(error, 'Error al cancelar el turno.'), 'error');
       return false;
     }
   };
 
-  return { turnos, loading, cancelarTurno };
+  return {
+    turnos: actual?.turnos || [], loading, error: actual?.error || null,
+    reintentar: () => setIntento(valor => valor + 1), cancelarTurno,
+  };
 };

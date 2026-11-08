@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Link } from 'react-router-dom';
 import ProtectedRoute from '../components/layout/ProtectedRoute';
 import Navbar from '../components/layout/Navbar';
 
@@ -41,6 +41,13 @@ const AppRouter = () => {
             <Route path="/mi-agenda" element={<AgendaPersonal />} />
             <Route path="/perfil" element={<PerfilUsuario />} />
           </Route>
+          <Route path="*" element={
+            <div className="mx-auto max-w-xl px-4 py-16 text-center">
+              <h1 className="text-2xl font-bold text-app-black">Página no encontrada</h1>
+              <p className="mt-3 text-sm text-gray-600">El enlace no existe o la dirección no es correcta.</p>
+              <Link to="/" className="mt-6 inline-block rounded-xl bg-app-marineblue px-6 py-3 font-semibold text-white">Volver al inicio</Link>
+            </div>
+          } />
         </Routes>
       </main>
     </BrowserRouter>

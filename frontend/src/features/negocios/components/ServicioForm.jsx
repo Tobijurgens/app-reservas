@@ -1,15 +1,29 @@
-import { useState, useEffect } from 'react';
+import { useState, useRef } from 'react';
+import { useToast } from '../../../context/ToastContext';
+import { mensajeError } from '../../../utils/errores';
 
 const ServicioForm = ({ initialData, recursoNombre, onSubmit, onCancel }) => {
-  const [formData, setFormData] = useState({ nombre: '', descripcion: '', precio: '', duracionMinutos: '' });
+  const [formData, setFormData] = useState(() => ({
+    nombre: initialData?.nombre || '', descripcion: initialData?.descripcion || '',
+    precio: initialData?.precio ?? '', duracionMinutos: initialData?.duracionMinutos ?? '',
+  }));
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const enviando = useRef(false);
+  const { addToast } = useToast();
 
-  useEffect(() => {
-    if (initialData) setFormData(initialData);
-  }, [initialData]);
-
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    onSubmit(formData);
+    if (enviando.current) return;
+    enviando.current = true;
+    setIsSubmitting(true);
+    try {
+      await onSubmit(formData);
+    } catch (error) {
+      addToast(mensajeError(error, 'Error al guardar el servicio.'), 'error');
+    } finally {
+      enviando.current = false;
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -39,10 +53,10 @@ const ServicioForm = ({ initialData, recursoNombre, onSubmit, onCancel }) => {
       </div>
 
       <footer className="flex justify-end gap-4 mt-2">
-        <button type="submit" className="bg-app-marineblue text-white px-6 py-2 rounded-xl text-xs font-bold uppercase tracking-wider hover:bg-app-black/90 transition-colors shadow-sm duration-300">
-          {initialData ? 'Actualizar' : 'Guardar'}
+        <button type="submit" disabled={isSubmitting} className="bg-app-marineblue text-white px-6 py-2 rounded-xl text-xs font-bold uppercase tracking-wider hover:bg-app-black/90 transition-colors shadow-sm duration-300">
+          {isSubmitting ? 'Guardando...' : initialData ? 'Actualizar' : 'Guardar'}
         </button>
-        <button type="button" onClick={onCancel} className="text-app-black px-6 py-2 rounded-xl text-xs font-bold uppercase tracking-wider hover:text-app-red hover:bg-app-black/5 transition-colors shadow-sm duration-300">Cancelar</button>
+        <button type="button" disabled={isSubmitting} onClick={onCancel} className="text-app-black px-6 py-2 rounded-xl text-xs font-bold uppercase tracking-wider hover:text-app-red hover:bg-app-black/5 transition-colors shadow-sm duration-300">Cancelar</button>
       </footer>
     </form>
   );

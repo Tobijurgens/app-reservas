@@ -1,48 +1,25 @@
-import { useState, useEffect } from 'react';
-import { RecursosService } from '../../../services/RecursosService';
-import { TurnosService } from '../../../services/TurnosService';
+import { useState, useContext } from 'react';
+import { AuthContext } from '../../../context/AuthContext';
+import { useMisAsignaciones } from './useMisAsignaciones';
+import { useAgendaRecurso } from './useAgendaRecurso';
+import { esAsignacionActiva } from '../utils/asignaciones';
 
 export const useAgendaPersonal = () => {
-  const [recursosAsignados, setRecursosAsignados] = useState([]);
-  const [recursoSeleccionado, setRecursoSeleccionado] = useState(null);
-  const [turnos, setTurnos] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const { user } = useContext(AuthContext);
+  const { asignaciones, loading: loadingAsignaciones, error: errorAsignaciones, reintentar: recargarAsignaciones } = useMisAsignaciones();
+  const [seleccion, setSeleccion] = useState(null);
+  const puedeConsultar = recurso => recurso.propietario === true || esAsignacionActiva(recurso, user?.email);
+  const recursosAsignados = asignaciones.filter(puedeConsultar);
+  const asignacionesNoActivas = asignaciones.filter(recurso => !puedeConsultar(recurso));
+  const recursoSeleccionado = !loadingAsignaciones && !errorAsignaciones && recursosAsignados.some(recurso => recurso.id === seleccion)
+    ? seleccion : null;
+  const agenda = useAgendaRecurso(recursoSeleccionado);
 
-  useEffect(() => {
-    const fetchRecursos = async () => {
-      try {
-        setLoading(true);
-        const data = await RecursosService.obtenerMisAsignaciones();
-        setRecursosAsignados(data);
-      } catch (error) { console.error('Error al cargar asignaciones:', error); } 
-      finally { setLoading(false); }
-    };
-    fetchRecursos();
-  }, []);
-
-  useEffect(() => {
-    const fetchAgenda = async () => {
-      if (!recursoSeleccionado) { setTurnos([]); return; }
-      try {
-        setLoading(true);
-        const data = await TurnosService.obtenerAgendaRecurso(recursoSeleccionado);
-        setTurnos(data);
-      } catch (error) { console.error('Error al cargar agenda:', error); } 
-      finally { setLoading(false); }
-    };
-    fetchAgenda();
-  }, [recursoSeleccionado]);
-
-  const cancelarTurno = async (idTurno) => {
-    try {
-      await TurnosService.cancelarTurno(idTurno);
-      setTurnos(prev => prev.map(t => t.id === idTurno ? { ...t, estado: 'CANCELADO' } : t));
-      return true;
-    } catch (error) {
-      alert(error.response?.data?.message || 'Error al cancelar el turno.');
-      return false;
-    }
+  return {
+    recursosAsignados, asignacionesNoActivas, recursoSeleccionado, setRecursoSeleccionado: setSeleccion,
+    turnos: agenda.turnos, loading: loadingAsignaciones || agenda.loading,
+    error: errorAsignaciones || agenda.error,
+    reintentar: errorAsignaciones ? recargarAsignaciones : agenda.reintentar,
+    cancelarTurno: agenda.cancelarTurno,
   };
-
-  return { recursosAsignados, recursoSeleccionado, setRecursoSeleccionado, turnos, loading, cancelarTurno };
 };

@@ -5,6 +5,8 @@ import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import lombok.ToString;
+import java.time.LocalDateTime;
 import java.util.List;
 
 @Entity
@@ -33,7 +35,11 @@ public class Recurso {
     @Enumerated(EnumType.STRING)
     private EstadoAsociacion estadoAsociacion;
 
+    @ToString.Exclude
     private String tokenInvitacion;
+
+    @Column(name = "fecha_expiracion_invitacion")
+    private LocalDateTime fechaExpiracionInvitacion;
 
     @OneToMany(mappedBy = "recurso", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<HorarioRecurso> horarios;

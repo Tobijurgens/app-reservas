@@ -8,12 +8,11 @@ import com.microservice.reservas.enums.EstadoCuenta;
 import com.microservice.reservas.enums.EstadoTurno;
 import com.microservice.reservas.repository.*;
 import lombok.RequiredArgsConstructor;
-import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.stereotype.Service;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
-import java.util.Optional;
 
 @Service
 @RequiredArgsConstructor
@@ -24,7 +23,7 @@ public class UsuarioService {
     private final NegocioRepository negocioRepository;
     private final NegocioService negocioService;
     private final RecursoRepository recursoRepository;
-    private final RabbitTemplate rabbitTemplate;
+    private final OutboxService outboxService;
 
     public Usuario actualizarPerfil(String emailLogueado, ActualizarPerfilRequest request) {
         Usuario usuario = usuarioRepository.findByEmailAndEstadoCuenta(emailLogueado, EstadoCuenta.ACTIVO)
@@ -38,15 +37,27 @@ public class UsuarioService {
     }
 
     public List<Usuario> obtenerTodos() {
-        return usuarioRepository.findByEstadoCuenta(EstadoCuenta.ACTIVO);
+        throw new AccessDeniedException("Acceso denegado: No está permitido listar datos personales de usuarios.");
     }
 
-    public Optional<Usuario> obtenerPorId(Long id) {
-        return usuarioRepository.findByIdAndEstadoCuenta(id, EstadoCuenta.ACTIVO);
+    public Usuario obtenerMiPerfil(String emailLogueado) {
+        return usuarioRepository.findByEmailAndEstadoCuenta(emailLogueado, EstadoCuenta.ACTIVO)
+                .orElseThrow(() -> new RuntimeException("Usuario no encontrado o inactivo."));
     }
 
-    public Optional<Usuario> obtenerPorEmail(String email) {
-        return usuarioRepository.findByEmailAndEstadoCuenta(email, EstadoCuenta.ACTIVO);
+    public Usuario obtenerPorId(Long id, String emailLogueado) {
+        Usuario propio = obtenerMiPerfil(emailLogueado);
+        if (!propio.getId().equals(id)) {
+            throw new AccessDeniedException("Acceso denegado: Solo podés consultar tu propio perfil.");
+        }
+        return propio;
+    }
+
+    public Usuario obtenerPorEmail(String email, String emailLogueado) {
+        if (!emailLogueado.equals(email)) {
+            throw new AccessDeniedException("Acceso denegado: Solo podés consultar tu propio perfil.");
+        }
+        return obtenerMiPerfil(emailLogueado);
     }
 
     @Transactional
@@ -92,7 +103,7 @@ public class UsuarioService {
             recursosDesvinculados++;
         }
 
-        rabbitTemplate.convertAndSend("notificaciones.exchange", "usuario.eliminado.routing.key", new UsuarioEliminadoEvent(usuario.getEmail()));
+        outboxService.encolar("notificaciones.exchange", "usuario.eliminado.routing.key", new UsuarioEliminadoEvent(usuario.getEmail()));
 
         return "Usuario eliminado lógicamente. Se cancelaron " + turnosAfectados.size() +
                 " turnos como cliente, se dieron de baja " + negociosBorrados +

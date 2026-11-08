@@ -1,25 +1,17 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import HorariosSemana from './HorariosSemana'; 
-import { ordenarHorariosPorDia } from '../../../utils/fechas'; 
+import { horariosIniciales } from '../../../utils/fechas';
 
 const NegocioForm = ({ initialData, onSubmit, onCancel, isSubmitting }) => {
-  const [formData, setFormData] = useState({
-    nombre: '', alias: '', descripcion: '', direccion: '', telefono: '', emailContacto: '', horarios: []
-  });
-
-  useEffect(() => {
-    if (initialData) {
-      setFormData({
-        nombre: initialData.nombre || '',
-        alias: initialData.alias || '',
-        descripcion: initialData.descripcion || '',
-        direccion: initialData.direccion || '',
-        telefono: initialData.telefono || '',
-        emailContacto: initialData.emailContacto || '',
-        horarios: ordenarHorariosPorDia(initialData.horarios)
-      });
-    }
-  }, [initialData]);
+  const [formData, setFormData] = useState(() => ({
+    nombre: initialData?.nombre || '',
+    alias: initialData?.alias || '',
+    descripcion: initialData?.descripcion || '',
+    direccion: initialData?.direccion || '',
+    telefono: initialData?.telefono || '',
+    emailContacto: initialData?.emailContacto || '',
+    horarios: horariosIniciales(initialData?.horarios),
+  }));
 
   const handleChange = (e) => {
     let { id, value } = e.target;

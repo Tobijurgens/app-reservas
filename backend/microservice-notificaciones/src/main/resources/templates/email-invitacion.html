@@ -28,15 +28,14 @@
                         <p style="font-size: 16px; line-height: 1.6; color: #4b5563; margin: 0 0 10px 0;">El administrador de <strong style="color: #070707;" th:text="${nombreNegocio}">Negocio</strong> te invitó a unirte a su equipo de trabajo.</p>
                         <p style="font-size: 16px; line-height: 1.6; color: #4b5563; margin: 0 0 35px 0;">Se te asignará la agenda para el rol de: <strong style="color: #0f6c9b;" th:text="${nombreRecurso}">Recurso</strong>.</p>
 
-                        <p style="font-size: 15px; color: #4b5563; text-align: center; margin-bottom: 25px;">Por favor, confirmá tu respuesta:</p>
+                        <p style="font-size: 15px; color: #4b5563; text-align: center; margin-bottom: 25px;">La invitación vence a los 7 días. Abrí el enlace para ver los detalles y elegir Aceptar o Rechazar. Abrirlo no confirma ninguna decisión.</p>
 
                         <div style="text-align: center;">
-                            <a th:href="${linkAceptar}" style="display: inline-block; padding: 12px 24px; background-color: #0f6c9b; color: #ffffff; text-decoration: none; border-radius: 10px; font-weight: bold; margin: 5px 10px; font-size: 15px;">Aceptar Invitación</a>
-                            <a th:href="${linkRechazar}" style="display: inline-block; padding: 12px 24px; background-color: #ffffff; color: #8b2929; border: 1px solid #8b2929; text-decoration: none; border-radius: 10px; font-weight: bold; margin: 5px 10px; font-size: 15px;">Rechazar</a>
+                            <a th:href="${linkConfirmar}" style="display: inline-block; padding: 12px 24px; background-color: #0f6c9b; color: #ffffff; text-decoration: none; border-radius: 10px; font-weight: bold; margin: 5px 10px; font-size: 15px;">Ver invitación</a>
                         </div>
 
                         <p style="font-size: 13px; color: #9ca3af; line-height: 1.5; margin: 40px 0 0 0; text-align: center;">
-                            Si no esperabas este correo, podés ignorarlo o hacer clic en "Rechazar".
+                            Si no esperabas este correo, podés ignorarlo o rechazar la invitación desde la pantalla de confirmación. No compartas este enlace.
                         </p>
                     </td>
                 </tr>

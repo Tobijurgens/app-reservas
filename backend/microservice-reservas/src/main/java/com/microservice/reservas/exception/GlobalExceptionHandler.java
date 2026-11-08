@@ -4,6 +4,7 @@ import com.fasterxml.jackson.annotation.JsonInclude;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -15,6 +16,25 @@ import java.util.Map;
 
 @RestControllerAdvice
 public class GlobalExceptionHandler {
+
+    @ExceptionHandler(TurnoException.class)
+    public ResponseEntity<ErrorResponse> handleTurnoException(TurnoException ex) {
+        return ResponseEntity.status(ex.getStatus()).body(new ErrorResponse(
+                LocalDateTime.now(), ex.getStatus().value(), ex.getStatus().getReasonPhrase(), ex.getMessage()));
+    }
+
+    @ExceptionHandler(InvitacionException.class)
+    public ResponseEntity<ErrorResponse> handleInvitacionException(InvitacionException ex) {
+        return ResponseEntity.status(ex.getStatus()).cacheControl(org.springframework.http.CacheControl.noStore())
+                .body(new ErrorResponse(LocalDateTime.now(), ex.getStatus().value(),
+                        ex.getStatus().getReasonPhrase(), ex.getMessage()));
+    }
+
+    @ExceptionHandler(AccessDeniedException.class)
+    public ResponseEntity<ErrorResponse> handleAccessDeniedException(AccessDeniedException ex) {
+        return ResponseEntity.status(403).body(new ErrorResponse(
+                LocalDateTime.now(), 403, "Forbidden", ex.getMessage()));
+    }
 
     @ExceptionHandler(RuntimeException.class)
     public ResponseEntity<ErrorResponse> handleRuntimeException(RuntimeException ex) {

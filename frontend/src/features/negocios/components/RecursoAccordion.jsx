@@ -19,8 +19,9 @@ const RecursoAccordion = ({ recurso, isExpanded, onToggle, onEditRecurso, onDele
   };
 
   const handleServicioSubmit = async (formData) => {
-    await onSaveServicio(formData, editingServicio?.id, recurso.id);
-    handleCloseServicioForm();
+    const resultado = await onSaveServicio(formData, editingServicio?.id, recurso.id);
+    if (resultado?.success) handleCloseServicioForm();
+    return resultado;
   };
 
   const renderEstadoAsociacion = () => {

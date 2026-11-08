@@ -59,6 +59,8 @@ services:
     environment:
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres-db:5432/turnos_db
       SPRING_RABBITMQ_HOST: rabbitmq
+      APP_OUTBOX_RETRY_INITIAL_MS: ${OUTBOX_RETRY_INITIAL_MS:-60000}
+      APP_OUTBOX_RETRY_MAX_MS: ${OUTBOX_RETRY_MAX_MS:-300000}
       JWT_SECRET_KEY: ${JWT_SECRET_KEY}
     depends_on:
       - postgres-db
@@ -73,6 +75,12 @@ services:
     environment:
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres-notificaciones:5432/notificaciones_db
       SPRING_RABBITMQ_HOST: rabbitmq
+      SPRING_MAIL_HOST: ${SMTP_HOST:-smtp.gmail.com}
+      SPRING_MAIL_PORT: ${SMTP_PORT:-587}
+      APP_NOTIFICACIONES_MAX_INTENTOS: ${SMTP_MAX_INTENTOS:-5}
+      APP_NOTIFICACIONES_RETRY_INITIAL_MS: ${SMTP_RETRY_INITIAL_MS:-60000}
+      APP_NOTIFICACIONES_RETRY_MAX_MS: ${SMTP_RETRY_MAX_MS:-300000}
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY}
       MAIL_USERNAME: ${MAIL_USERNAME}
       MAIL_PASSWORD: ${MAIL_PASSWORD}
     depends_on:

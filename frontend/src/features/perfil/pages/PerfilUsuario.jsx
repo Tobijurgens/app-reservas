@@ -1,24 +1,26 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { usePerfil } from '../hooks/usePerfil';
 import { useToast } from '../../../context/ToastContext';
 import ModalConfirmacion from '../../../components/ModalConfirmacion';
 
 const PerfilUsuario = () => {
-  const { perfil, loading, isSubmitting, actualizarPerfil, eliminarCuenta } = usePerfil();
-  const { addToast } = useToast();
-  
-  const [formData, setFormData] = useState({ nombre: '', apellido: '', telefono: '' });
-  const [mostrarModalEliminar, setMostrarModalEliminar] = useState(false);
+  const datos = usePerfil();
+  if (datos.loading) return <div className="flex justify-center py-20"><div className="animate-spin rounded-full h-10 w-10 border-b-2 border-app-marineblue"></div></div>;
+  if (datos.error || !datos.perfil) return (
+    <div role="alert" className="mx-auto max-w-3xl px-4 py-12 text-center">
+      <p>{datos.error || 'No pudimos cargar tu perfil.'}</p>
+      <button onClick={datos.reintentar} className="mt-4 font-semibold text-app-marineblue hover:underline">Reintentar</button>
+    </div>
+  );
+  return <DatosPerfil key={datos.perfil.id} {...datos} />;
+};
 
-  useEffect(() => {
-    if (perfil) {
-      setFormData({
-        nombre: perfil.nombre || '',
-        apellido: perfil.apellido || '',
-        telefono: perfil.telefono || ''
-      });
-    }
-  }, [perfil]);
+const DatosPerfil = ({ perfil, isSubmitting, actualizarPerfil, eliminarCuenta }) => {
+  const { addToast } = useToast();
+  const [formData, setFormData] = useState(() => ({
+    nombre: perfil.nombre || '', apellido: perfil.apellido || '', telefono: perfil.telefono || '',
+  }));
+  const [mostrarModalEliminar, setMostrarModalEliminar] = useState(false);
 
   const handleChange = (e) => setFormData({ ...formData, [e.target.name]: e.target.value });
 
@@ -26,11 +28,13 @@ const PerfilUsuario = () => {
     e.preventDefault();
     const res = await actualizarPerfil(formData);
     
-    if (res.success) addToast('¡Perfil actualizado correctamente!', 'success');
+    if (res.success) {
+      setFormData({ nombre: res.perfil.nombre || '', apellido: res.perfil.apellido || '', telefono: res.perfil.telefono || '' });
+      addToast('¡Perfil actualizado correctamente!', 'success');
+    }
     else addToast(res.message, 'error');
   };
 
-  if (loading) return <div className="flex justify-center py-20"><div className="animate-spin rounded-full h-10 w-10 border-b-2 border-app-marineblue"></div></div>;
 
   return (
     <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-8 animate-fadeIn">
@@ -82,7 +86,7 @@ const PerfilUsuario = () => {
 
       <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6 sm:p-8">
         <h2 className="text-lg font-bold text-app-black mb-2">Zona Peligrosa</h2>
-        <p className="text-sm text-app-marineblue mb-6">Eliminar tu cuenta es una acción irreversible. Se darán de baja todos tus negocios, se eliminarán tus servicios y se cancelarán tus turnos pendientes.</p>
+        <p className="text-sm text-app-red mb-6">Eliminar tu cuenta es una acción irreversible. Se darán de baja todos tus negocios, se eliminarán tus servicios y se cancelarán tus turnos pendientes.</p>
         <button type="button" onClick={() => setMostrarModalEliminar(true)} className="px-5 py-3 bg-white text-app-black border border-app-black hover:bg-app-red hover:border-app-red hover:text-white rounded-xl text-sm font-bold transition-colors shadow-sm duration-300">
           Eliminar mi cuenta definitivamente
         </button>

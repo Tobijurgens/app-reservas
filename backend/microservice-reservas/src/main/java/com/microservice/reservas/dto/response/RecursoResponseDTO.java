@@ -2,6 +2,7 @@ package com.microservice.reservas.dto.response;
 
 import com.microservice.reservas.dto.request.HorarioSemanalDTO;
 import com.microservice.reservas.entity.Recurso;
+import com.microservice.reservas.security.PermisosRecurso;
 import lombok.Data;
 
 import java.util.ArrayList;
@@ -17,16 +18,18 @@ public class RecursoResponseDTO {
     private String nombreNegocio;
     private String emailUsuario;
     private Boolean activo;
+    private boolean propietario;
 
     private String estadoAsociacion;
 
     private List<HorarioSemanalDTO> horarios = new ArrayList<>();
 
-    public RecursoResponseDTO(Recurso recurso) {
+    public RecursoResponseDTO(Recurso recurso, String emailLogueado) {
         this.id = recurso.getId();
         this.nombre = recurso.getNombre();
         this.descripcion = recurso.getDescripcion();
         this.activo = recurso.getActivo();
+        this.propietario = PermisosRecurso.esPropietario(recurso, emailLogueado);
 
         if (recurso.getEstadoAsociacion() != null) {
             this.estadoAsociacion = recurso.getEstadoAsociacion().name();

@@ -7,7 +7,7 @@ import { DIAS_ES, ordenarHorariosPorDia } from '../../../utils/fechas'; // Ruta 
 
 const NegocioPerfil = () => {
   const { id } = useParams();
-  const { negocio, recursos, loading, error } = useNegocioPublico(id);
+  const { negocio, recursos, loading, error, reintentar } = useNegocioPublico(id);
 
   const [modalAbierto, setModalAbierto] = useState(false);
   const [servicioSeleccionado, setServicioSeleccionado] = useState(null);
@@ -28,7 +28,8 @@ const NegocioPerfil = () => {
       <div className="flex flex-col items-center justify-center min-h-[calc(100vh-4rem)] px-4 bg-app-white">
         <span className="text-5xl mb-8"><FaceSlightlyFrowning /></span>
         <h2 className="text-2xl font-bold text-app-black mb-2">¡Ups!</h2>
-        <p className="text-app-black text-center mb-6">{error}</p>
+        <p role="alert" className="text-app-black text-center mb-6">{error}</p>
+        <button onClick={reintentar} className="mb-4 font-semibold text-app-marineblue hover:underline">Reintentar</button>
         <Link to="/" className="bg-app-marineblue text-white px-6 py-3 rounded-xl font-medium hover:bg-app-black/90 transition-colors shadow-sm duration-300">
           Volver al inicio
         </Link>

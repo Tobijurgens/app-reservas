@@ -5,10 +5,14 @@ import TurnoCard from '../components/TurnoCard';
 import ModalDetalleTurno from '../components/ModalDetalleTurno';
 import ModalConfirmacion from '../../../components/ModalConfirmacion';
 import { Store } from 'lucide-react';
+import EstadoInvitacion from '../components/EstadoInvitacion';
 
 const AgendaPersonal = () => {
   const { 
-    recursosAsignados, 
+    recursosAsignados,
+    asignacionesNoActivas,
+    error,
+    reintentar,
     recursoSeleccionado, 
     setRecursoSeleccionado, 
     turnos, 
@@ -26,6 +30,25 @@ const AgendaPersonal = () => {
   if (loading && recursosAsignados.length === 0) {
     return <div className="flex justify-center py-20"><div className="animate-spin rounded-full h-10 w-10 border-b-2 border-app-marineblue"></div></div>;
   }
+
+  if (error && recursosAsignados.length === 0) return (
+    <div role="alert" className="mx-auto max-w-4xl px-4 py-12 text-center">
+      <p>{error}</p>
+      <button onClick={reintentar} className="mt-4 font-semibold text-app-marineblue hover:underline">Reintentar</button>
+    </div>
+  );
+
+  if (recursosAsignados.length === 0 && asignacionesNoActivas.length > 0) return (
+    <div className="mx-auto max-w-4xl px-4 py-12">
+      <h1 className="text-2xl font-bold text-app-black">Mi Agenda de Trabajo</h1>
+      {asignacionesNoActivas.map(recurso => (
+        <div key={recurso.id} className="mt-6 rounded-2xl border border-gray-100 bg-white p-6">
+          <h2 className="font-bold">{recurso.nombreNegocio} — {recurso.nombre}</h2>
+          <EstadoInvitacion estado={recurso.estadoAsociacion} />
+        </div>
+      ))}
+    </div>
+  );
 
   if (recursosAsignados.length === 0) {
     return (
@@ -64,14 +87,26 @@ const AgendaPersonal = () => {
           <option value="" disabled>Seleccioná un negocio...</option>
           {recursosAsignados.map(r => (
             <option key={r.id} value={r.id}>
-              {r.nombreNegocio}
+              {r.nombreNegocio} — {r.nombre}
             </option>
           ))}
         </select>
       </header>
 
+      {asignacionesNoActivas.map(recurso => (
+        <div key={recurso.id} className="mb-6 rounded-xl border border-gray-100 bg-white p-4">
+          <p className="font-semibold">{recurso.nombreNegocio} — {recurso.nombre}</p>
+          <EstadoInvitacion estado={recurso.estadoAsociacion} />
+        </div>
+      ))}
+
       <main className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 min-h-100">
-        {!recursoSeleccionado ? (
+        {error ? (
+          <div role="alert" className="py-12 text-center text-sm">
+            <p>{error}</p>
+            <button onClick={reintentar} className="mt-4 font-semibold text-app-marineblue hover:underline">Reintentar</button>
+          </div>
+        ) : !recursoSeleccionado ? (
           <div className="text-center py-16 bg-app-white rounded-2xl border border-dashed border-gray-200">
             <Store className="h-12 w-12 mx-auto mb-3 " />
             <p className="text-app-marineblue font-medium text-lg">Seleccioná un negocio arriba</p>
